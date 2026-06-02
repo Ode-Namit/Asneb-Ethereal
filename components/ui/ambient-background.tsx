@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
+import { PremiumCursor } from "@/components/ui/premium-cursor";
 
 const CelestialScene = dynamic(
   () => import("@/components/ui/celestial-scene").then((module) => module.CelestialScene),
@@ -51,6 +52,7 @@ export function AmbientBackground({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden bg-space">
+      <PremiumCursor />
       <div className="absolute inset-0 opacity-80">
         <CelestialScene compact={compact} />
       </div>

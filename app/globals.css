@@ -182,6 +182,60 @@ button {
     linear-gradient(180deg, rgba(16, 19, 31, 0.82), rgba(7, 7, 18, 0.92));
 }
 
+.premium-cursor-layer {
+  --cursor-aura-opacity: 0.46;
+  --cursor-ring-opacity: 0.34;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+}
+
+.premium-cursor-aura,
+.premium-cursor-ring,
+.premium-cursor-spark {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.premium-cursor-aura {
+  width: 13rem;
+  height: 13rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255, 250, 240, 0.16), rgba(246, 215, 138, 0.08) 28%, rgba(139, 233, 255, 0.035) 46%, transparent 70%);
+  filter: blur(10px);
+  opacity: var(--cursor-aura-opacity);
+  mix-blend-mode: screen;
+  transition: opacity 260ms ease;
+}
+
+.premium-cursor-ring {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid rgba(255, 250, 240, 0.42);
+  border-radius: 999px;
+  box-shadow:
+    0 0 14px rgba(246, 215, 138, 0.26),
+    inset 0 0 8px rgba(139, 233, 255, 0.16);
+  opacity: var(--cursor-ring-opacity);
+  transition: opacity 220ms ease;
+}
+
+.premium-cursor-spark {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.84);
+  box-shadow:
+    0 0 10px rgba(255, 250, 240, 0.72),
+    0 0 18px rgba(246, 215, 138, 0.32);
+  opacity: calc(0.5 - (var(--spark-index) * 0.08));
+}
+
 @keyframes cinematic-reveal {
   from {
     opacity: 0;
@@ -205,6 +259,16 @@ button {
 
   .cinematic-reveal {
     animation: none;
+  }
+
+  .premium-cursor-spark {
+    display: none;
+  }
+}
+
+@media (pointer: coarse), (max-width: 767px) {
+  .premium-cursor-layer {
+    display: none;
   }
 }
 
