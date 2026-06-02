@@ -3,8 +3,8 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ASNEB : Unicorn",
-  description: "An AI-powered theoretical physics workstation.",
+  title: "ASNEB : Ethereal Reading OS",
+  description: "An ambient reading sanctuary for PDFs, memory, and AI reflection.",
 };
 
 export default function RootLayout({

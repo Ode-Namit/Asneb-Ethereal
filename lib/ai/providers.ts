@@ -1,6 +1,7 @@
 import type {
   ExplainResponse,
   PromptMode,
+  TutorRequestContext,
   TutorStreamEvent,
 } from "@/lib/types";
 
@@ -11,17 +12,29 @@ const DEFAULT_MAX_CONTINUATIONS = 4;
 
 const instructions: Record<PromptMode, string> = {
   explain:
-    "Explain the selected evidence with precise, accessible definitions. State the physical intuition first, then clarify notation, assumptions, and context.",
+    "Explain the selected passage with precise, accessible definitions. State the core intuition first, then clarify notation, assumptions, and context.",
   deconstruct:
-    "Deconstruct the selected formula, proof, or scientific claim step by step. Define symbols, state assumptions, explain transformations, and connect the result to physical meaning.",
+    "Deconstruct the selected formula, proof, theorem, or claim step by step. Define symbols, state assumptions, explain transformations, and connect the result to meaning.",
   summarize:
-    "Summarize the selected evidence as compact, rigorous bullet points. Preserve formulas, conditions, and scientific distinctions. End with one clear takeaway.",
+    "Summarize the selected passage as compact, rigorous bullet points. Preserve formulas, conditions, and important distinctions. End with one clear takeaway.",
   derivation:
     "Develop the derivation carefully from the stated assumptions. Show each meaningful algebraic or conceptual step, define symbols, and identify any missing premises.",
   intuition:
-    "Build a strong physical intuition for the selected evidence. Use a concrete mental model, state where the analogy stops being exact, and connect it back to the mathematics.",
+    "Build strong intuition for the selected passage. Use a concrete mental model, state where the analogy stops being exact, and connect it back to the formal details.",
   "problem-solving":
     "Turn the selected evidence into a problem-solving guide. Identify the givens, the target quantity, the governing principles, a reliable strategy, and common mistakes.",
+  learning:
+    "Explain the selected passage as if the reader is learning it now. Keep the tone patient and elegant, define every necessary idea, and build confidence without diluting rigor.",
+  advanced:
+    "Analyze the selected passage at an advanced level. Surface hidden assumptions, edge cases, implications, formal structure, and places where a specialist would be careful.",
+  theorem:
+    "Give theorem intuition. Identify the statement, hypotheses, conclusion, proof strategy, why the result should be true, and how each condition carries weight.",
+  insights:
+    "Extract the key insights. Separate main ideas from supporting details, name the conceptual pivots, and end with intelligent follow-up questions.",
+  formula:
+    "Explain the formula or symbolic structure. Define each term, describe the dimensional or structural role, and translate the expression into plain language.",
+  reflection:
+    "Write an AI-generated reading reflection. Connect the passage to the surrounding context, name what is intellectually alive in it, and suggest a calm next step.",
 };
 
 type StreamCallback = (event: TutorStreamEvent) => void;
@@ -44,11 +57,13 @@ type Provider = {
 
 class ProviderRequestError extends Error {
   retryable: boolean;
+  status: number;
 
-  constructor(message: string, retryable = false) {
+  constructor(message: string, retryable = false, status = 0) {
     super(message);
     this.name = "ProviderRequestError";
     this.retryable = retryable;
+    this.status = status;
   }
 }
 
@@ -75,6 +90,14 @@ function isRetryableStatus(status: number) {
   return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
+function isGeminiKeyFailure(status: number, message = "") {
+  return (
+    status === 429 ||
+    status === 503 ||
+    /quota|resource_exhausted|rate limit|exhausted/i.test(message)
+  );
+}
+
 function toProviderError(name: string, error: unknown) {
   if (error instanceof ProviderRequestError) {
     return error;
@@ -85,6 +108,14 @@ function toProviderError(name: string, error: unknown) {
     }`,
     true,
   );
+}
+
+function limitLines(items: string[] | undefined, maxItems: number, maxChars: number) {
+  return (items ?? [])
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .map((item) => (item.length > maxChars ? `${item.slice(0, maxChars)}...` : item));
 }
 
 function stripCompletionMarker(text: string) {
@@ -154,7 +185,7 @@ function budgetEvidence(text: string) {
   return {
     evidence: `${text.slice(0, headLength)}
 
-[... middle evidence shortened to preserve the tutor token budget ...]
+[... middle evidence shortened to preserve the companion token budget ...]
 
 ${preservedEquations ? `Important mathematical context:\n${preservedEquations}\n\n` : ""}${text.slice(
       -tailLength,
@@ -163,8 +194,49 @@ ${preservedEquations ? `Important mathematical context:\n${preservedEquations}\n
   };
 }
 
-function buildPrompt(mode: PromptMode, text: string) {
-  return `You are the ASNEB Unicorn physics research assistant: a rigorous, calm tutor for advanced scientific reading.
+function buildContextBlock(context?: TutorRequestContext) {
+  if (!context) {
+    return "";
+  }
+
+  const highlights = limitLines(context.highlights, 6, 420);
+  const notes = limitLines(context.notes, 6, 420);
+  const previousAnalyses = limitLines(context.previousAnalyses, 4, 560);
+  const surroundingText = context.surroundingText
+    ?.replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 9000);
+
+  return `## Reading context
+${context.bookTitle ? `Document: ${context.bookTitle}\n` : ""}${
+    context.currentPage ? `Current page: ${context.currentPage}\n` : ""
+  }${context.chapterTitle ? `Nearby chapter or section: ${context.chapterTitle}\n` : ""}${
+    surroundingText ? `Surrounding page context:\n${surroundingText}\n` : ""
+  }${
+    highlights.length
+      ? `Relevant memory fragments:\n${highlights.map((item) => `- ${item}`).join("\n")}\n`
+      : ""
+  }${
+    notes.length
+      ? `Relevant notes:\n${notes.map((item) => `- ${item}`).join("\n")}\n`
+      : ""
+  }${
+    previousAnalyses.length
+      ? `Earlier companion reflections in this session:\n${previousAnalyses
+          .map((item) => `- ${item}`)
+          .join("\n")}\n`
+      : ""
+  }`;
+}
+
+function buildPrompt(
+  mode: PromptMode,
+  text: string,
+  context?: TutorRequestContext,
+) {
+  return `You are ASNEB's Ethereal Reading Companion: a wise, rigorous, calm intellectual presence for deep reading.
+
+You can support mathematics, science, philosophy, literature, and technical PDFs. Be analytical without sounding robotic. Be reflective without becoming vague. If the passage is mathematical or scientific, preserve formal precision and notation.
 
 ## Task
 ${instructions[mode]}
@@ -175,18 +247,29 @@ ${instructions[mode]}
 - Close every Markdown code fence and every display equation block.
 - Never invent missing context; state uncertainty explicitly.
 - Do not stop mid-sentence.
+- Use the provided reading context when relevant, but prioritize the selected passage.
+- End with 2-3 intelligent follow-up suggestions when helpful.
 - End the fully completed answer with this exact marker on its own line:
 ${COMPLETE_MARKER}
+
+${buildContextBlock(context)}
 
 ## Selected evidence
 ${text}`;
 }
 
-function buildContinuationPrompt(mode: PromptMode, evidence: string, analysis: string) {
-  return `You are continuing an ASNEB Unicorn physics tutor response that was cut off.
+function buildContinuationPrompt(
+  mode: PromptMode,
+  evidence: string,
+  analysis: string,
+  context?: TutorRequestContext,
+) {
+  return `You are continuing an ASNEB Ethereal Reading Companion response that was cut off.
 
 Continue the answer only. Do not repeat prior paragraphs. Preserve Markdown and LaTeX notation. Close any unfinished code fence or equation block. Finish the current sentence, complete the remaining reasoning for the ${mode} task, and end the finished answer with:
 ${COMPLETE_MARKER}
+
+${buildContextBlock(context).slice(0, 5000)}
 
 Selected evidence context:
 ${evidence.slice(-5000)}
@@ -195,11 +278,17 @@ Tail of the existing answer:
 ${analysis.slice(-7000)}`;
 }
 
-function buildFallbackPrompt(mode: PromptMode, evidence: string) {
-  return `You are the ASNEB Unicorn physics research assistant. Prior attempts to produce a long response could not complete reliably.
+function buildFallbackPrompt(
+  mode: PromptMode,
+  evidence: string,
+  context?: TutorRequestContext,
+) {
+  return `You are ASNEB's Ethereal Reading Companion. Prior attempts to produce a long response could not complete reliably.
 
 Provide a concise but complete ${mode} analysis of the selected evidence. Use polished Markdown, preserve important equations, close every Markdown or LaTeX block, and do not stop mid-sentence. Prefer a shorter complete answer over a long unfinished answer. End with:
 ${COMPLETE_MARKER}
+
+${buildContextBlock(context).slice(0, 5000)}
 
 Selected evidence:
 ${evidence}`;
@@ -246,18 +335,117 @@ async function* readSse(response: Response) {
   }
 }
 
+type GeminiKeyState = {
+  cooldownUntil: number;
+  failures: number;
+  inFlight: number;
+  key: string;
+  label: string;
+  lastUsed: number;
+};
+
+const geminiKeyStates = new Map<string, GeminiKeyState>();
+
+function getGeminiApiKeys() {
+  const multiKeyValue = process.env.GEMINI_API_KEYS?.trim();
+  if (multiKeyValue) {
+    return multiKeyValue
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean);
+  }
+
+  const singleKey = process.env.GEMINI_API_KEY?.trim();
+  return singleKey ? [singleKey] : [];
+}
+
+function getGeminiKeyStates() {
+  const keys = getGeminiApiKeys();
+  const active = new Set(keys);
+
+  for (const key of Array.from(geminiKeyStates.keys())) {
+    if (!active.has(key)) {
+      geminiKeyStates.delete(key);
+    }
+  }
+
+  keys.forEach((key, index) => {
+    if (!geminiKeyStates.has(key)) {
+      geminiKeyStates.set(key, {
+        cooldownUntil: 0,
+        failures: 0,
+        inFlight: 0,
+        key,
+        label: `key-${index + 1}`,
+        lastUsed: 0,
+      });
+    }
+  });
+
+  return keys
+    .map((key) => geminiKeyStates.get(key))
+    .filter((state): state is GeminiKeyState => Boolean(state));
+}
+
+function selectGeminiKey() {
+  const states = getGeminiKeyStates();
+  const now = Date.now();
+  const available = states.filter((state) => state.cooldownUntil <= now);
+
+  if (!available.length) {
+    const nextReady = Math.min(...states.map((state) => state.cooldownUntil));
+    throw new ProviderRequestError(
+      `gemini keys are cooling down for ${Math.max(
+        1,
+        Math.ceil((nextReady - now) / 1000),
+      )}s.`,
+      true,
+      429,
+    );
+  }
+
+  available.sort(
+    (left, right) =>
+      left.inFlight - right.inFlight || left.lastUsed - right.lastUsed,
+  );
+  const selected = available[0];
+  selected.inFlight += 1;
+  selected.lastUsed = now;
+  return selected;
+}
+
+function releaseGeminiKey(state: GeminiKeyState) {
+  state.inFlight = Math.max(0, state.inFlight - 1);
+}
+
+function coolDownGeminiKey(
+  state: GeminiKeyState,
+  status: number,
+  message = "",
+) {
+  if (!isGeminiKeyFailure(status, message)) {
+    return;
+  }
+
+  state.failures += 1;
+  const cooldownMs = Math.min(15 * 60 * 1000, 45_000 * 2 ** (state.failures - 1));
+  state.cooldownUntil = Date.now() + cooldownMs;
+}
+
 function createGeminiProvider(): Provider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const keys = getGeminiApiKeys();
+  if (!keys.length) {
     return null;
   }
 
   const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+  const rotationMode = Boolean(process.env.GEMINI_API_KEYS?.trim());
   return {
-    name: "gemini",
+    name: rotationMode ? "gemini-rotation" : "gemini",
     model,
     retryAttempts: getPositiveInteger(process.env.GEMINI_RETRY_ATTEMPTS, 4),
     async generate(prompt, onDelta, maxOutputTokens) {
+      const keyState = selectGeminiKey();
       let response: Response;
       try {
         response = await fetch(
@@ -268,7 +456,7 @@ function createGeminiProvider(): Provider | null {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-goog-api-key": apiKey,
+              "x-goog-api-key": keyState.key,
             },
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -281,45 +469,59 @@ function createGeminiProvider(): Provider | null {
           },
         );
       } catch (error) {
+        releaseGeminiKey(keyState);
         throw toProviderError("gemini", error);
       }
 
       if (!response.ok) {
+        const errorBody = await response.text().catch(() => "");
+        coolDownGeminiKey(keyState, response.status, errorBody);
+        releaseGeminiKey(keyState);
         throw new ProviderRequestError(
-          `gemini returned HTTP ${response.status}.`,
+          `gemini ${keyState.label} returned HTTP ${response.status}.`,
           isRetryableStatus(response.status),
+          response.status,
         );
       }
 
       let text = "";
       let finishReason = "";
-      for await (const data of readSse(response)) {
-        const payload = JSON.parse(data) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-            finishReason?: string;
-          }>;
-          error?: { message?: string };
-        };
-        if (payload.error) {
-          throw new ProviderRequestError(
-            `gemini stream failed: ${payload.error.message ?? "unknown error"}`,
-            true,
-          );
+      try {
+        for await (const data of readSse(response)) {
+          const payload = JSON.parse(data) as {
+            candidates?: Array<{
+              content?: { parts?: Array<{ text?: string }> };
+              finishReason?: string;
+            }>;
+            error?: { code?: number; message?: string; status?: string };
+          };
+          if (payload.error) {
+            const message = payload.error.message ?? "unknown error";
+            coolDownGeminiKey(keyState, payload.error.code ?? 0, message);
+            throw new ProviderRequestError(
+              `gemini ${keyState.label} stream failed: ${message}`,
+              true,
+              payload.error.code ?? 0,
+            );
+          }
+          const candidate = payload.candidates?.[0];
+          const delta =
+            candidate?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+          if (delta) {
+            text += delta;
+            onDelta(delta);
+          }
+          finishReason = candidate?.finishReason ?? finishReason;
         }
-        const candidate = payload.candidates?.[0];
-        const delta =
-          candidate?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
-        if (delta) {
-          text += delta;
-          onDelta(delta);
-        }
-        finishReason = candidate?.finishReason ?? finishReason;
+      } finally {
+        releaseGeminiKey(keyState);
       }
 
       if (!text.trim()) {
         throw new ProviderRequestError("gemini returned an empty analysis.", true);
       }
+      keyState.failures = 0;
+      keyState.cooldownUntil = 0;
       return { text, finishReason };
     },
   };
@@ -560,7 +762,7 @@ async function generateFromAvailableProvider(
       onEvent({
         type: "status",
         phase: "retrying",
-        message: `Switching tutor provider to ${provider.name}.`,
+        message: `Switching companion provider to ${provider.name}.`,
       });
     }
     try {
@@ -580,14 +782,21 @@ async function generateFromAvailableProvider(
       );
     }
   }
-  throw new ProviderRequestError(`All tutor providers failed. ${failures.join(" ")}`);
+  throw new ProviderRequestError(`All companion providers failed. ${failures.join(" ")}`);
 }
 
 export async function generateTutorAnalysis(
   mode: PromptMode,
   text: string,
-  onEvent: StreamCallback = () => undefined,
+  contextOrEvent?: TutorRequestContext | StreamCallback,
+  maybeOnEvent?: StreamCallback,
 ): Promise<ExplainResponse> {
+  const context =
+    typeof contextOrEvent === "function" ? undefined : contextOrEvent;
+  const onEvent =
+    typeof contextOrEvent === "function"
+      ? contextOrEvent
+      : maybeOnEvent ?? (() => undefined);
   const providers = getProviders();
   if (!providers.length) {
     throw new TutorGenerationError("No AI provider credentials are configured.");
@@ -608,21 +817,21 @@ export async function generateTutorAnalysis(
     phase: "generating",
     message: truncated
       ? "Evidence budget calibrated. Preserving equations and high-signal context."
-      : "Generating tutor analysis.",
+      : "Generating companion reflection.",
   });
 
   let generated;
   try {
     generated = await generateFromAvailableProvider(
       providers,
-      buildPrompt(mode, evidence),
+      buildPrompt(mode, evidence, context),
       "",
       onEvent,
       maxOutputTokens,
     );
   } catch (error) {
     throw new TutorGenerationError(
-      error instanceof Error ? error.message : "The tutor subsystem did not respond.",
+      error instanceof Error ? error.message : "The companion did not respond.",
     );
   }
 
@@ -643,7 +852,7 @@ export async function generateTutorAnalysis(
     try {
       const continuation = await generateWithRetries(
         generated.provider,
-        buildContinuationPrompt(mode, evidence, analysis),
+        buildContinuationPrompt(mode, evidence, analysis, context),
         analysis,
         onEvent,
         maxOutputTokens,
@@ -665,7 +874,7 @@ export async function generateTutorAnalysis(
     try {
       const fallback = await generateFromAvailableProvider(
         providers,
-        buildFallbackPrompt(mode, evidence),
+        buildFallbackPrompt(mode, evidence, context),
         "",
         onEvent,
         Math.min(maxOutputTokens, 4096),
@@ -684,7 +893,7 @@ export async function generateTutorAnalysis(
       };
     } catch (error) {
       throw new TutorGenerationError(
-        `The tutor could not complete a reliable answer. ${
+        `The companion could not complete a reliable answer. ${
           error instanceof Error ? error.message : "Fallback generation failed."
         }`,
         stripCompletionMarker(analysis),

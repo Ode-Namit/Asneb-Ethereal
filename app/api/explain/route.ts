@@ -3,7 +3,7 @@ import {
   TutorGenerationError,
 } from "@/lib/ai/providers";
 import { getPocketBaseUrl } from "@/lib/pocketbase";
-import type { PromptMode, TutorStreamEvent } from "@/lib/types";
+import type { PromptMode, TutorRequestContext, TutorStreamEvent } from "@/lib/types";
 
 export const runtime = "edge";
 
@@ -14,6 +14,12 @@ const promptModes = new Set<PromptMode>([
   "derivation",
   "intuition",
   "problem-solving",
+  "learning",
+  "advanced",
+  "theorem",
+  "insights",
+  "formula",
+  "reflection",
 ]);
 
 async function verifyPocketBaseToken(token: string) {
@@ -26,7 +32,7 @@ async function verifyPocketBaseToken(token: string) {
   );
 
   if (!authResponse.ok) {
-    console.error("[PocketBase] Tutor auth refresh failed", {
+    console.error("[PocketBase] Companion auth refresh failed", {
       path: "/api/collections/users/auth-refresh",
       status: authResponse.status,
     });
@@ -36,7 +42,11 @@ async function verifyPocketBaseToken(token: string) {
   return true;
 }
 
-function streamTutorAnalysis(mode: PromptMode, text: string) {
+function streamTutorAnalysis(
+  mode: PromptMode,
+  text: string,
+  context?: TutorRequestContext,
+) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -45,16 +55,16 @@ function streamTutorAnalysis(mode: PromptMode, text: string) {
       };
 
       try {
-        const result = await generateTutorAnalysis(mode, text, send);
+        const result = await generateTutorAnalysis(mode, text, context, send);
         send({ type: "complete", ...result });
       } catch (error) {
-        console.error("[ASNEB] Tutor streaming providers exhausted", error);
+        console.error("[ASNEB] Companion streaming providers exhausted", error);
         send({
           type: "error",
           message:
             error instanceof Error
               ? error.message
-              : "The tutor subsystem did not respond.",
+              : "The companion did not respond.",
           ...(error instanceof TutorGenerationError && error.partial
             ? { partial: error.partial }
             : {}),
@@ -83,7 +93,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Session expired." }, { status: 401 });
   }
 
-  let body: { text?: string; mode?: PromptMode };
+  let body: { context?: TutorRequestContext; text?: string; mode?: PromptMode };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -94,19 +104,19 @@ export async function POST(request: Request) {
   const mode = body.mode;
   if (!text || text.length > 50000 || !mode || !promptModes.has(mode)) {
     return Response.json(
-      { error: "Select between 1 and 50000 characters and a valid tutor mode." },
+      { error: "Select between 1 and 50000 characters and a valid companion mode." },
       { status: 400 },
     );
   }
 
   if (request.headers.get("accept")?.includes("text/event-stream")) {
-    return streamTutorAnalysis(mode, text);
+    return streamTutorAnalysis(mode, text, body.context);
   }
 
   try {
-    const result = await generateTutorAnalysis(mode, text);
+    const result = await generateTutorAnalysis(mode, text, body.context);
     if (process.env.NODE_ENV !== "production") {
-      console.debug("[ASNEB] Tutor API completed", {
+      console.debug("[ASNEB] Companion API completed", {
         continuationCount: result.continuationCount,
         fallback: result.fallback,
         model: result.model,
@@ -115,13 +125,13 @@ export async function POST(request: Request) {
     }
     return Response.json(result);
   } catch (error) {
-    console.error("[ASNEB] Tutor providers exhausted", error);
+    console.error("[ASNEB] Companion providers exhausted", error);
     return Response.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "The tutor subsystem did not respond.",
+            : "The companion did not respond.",
         ...(error instanceof TutorGenerationError && error.partial
           ? { partial: error.partial }
           : {}),

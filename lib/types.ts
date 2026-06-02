@@ -25,7 +25,13 @@ export type PromptMode =
   | "summarize"
   | "derivation"
   | "intuition"
-  | "problem-solving";
+  | "problem-solving"
+  | "learning"
+  | "advanced"
+  | "theorem"
+  | "insights"
+  | "formula"
+  | "reflection";
 
 export type HighlightColor = "cyan" | "violet" | "amber" | "emerald" | "rose";
 
@@ -87,6 +93,16 @@ export type DocumentPageRecord = RecordModel & {
   book: string;
   page: number;
   content: string;
+};
+
+export type TutorRequestContext = {
+  bookTitle?: string;
+  currentPage?: number;
+  chapterTitle?: string;
+  surroundingText?: string;
+  highlights?: string[];
+  notes?: string[];
+  previousAnalyses?: string[];
 };
 
 export type ExplainResponse = {

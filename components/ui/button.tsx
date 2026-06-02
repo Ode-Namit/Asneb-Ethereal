@@ -11,9 +11,9 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "border-cyan-300/35 bg-cyan-400/[0.11] text-cyan-50 hover:border-cyan-300/75 hover:bg-cyan-300/[0.17] hover:shadow-neon",
+      "border-aureate/40 bg-aureate/[0.12] text-pearl hover:border-aureate/75 hover:bg-aureate/[0.18] hover:shadow-halo",
     ghost:
-      "border-slate-500/20 bg-slate-900/35 text-slate-300 hover:border-cyan-300/35 hover:bg-cyan-400/[0.07] hover:text-white",
+      "border-pearl/15 bg-pearl/[0.06] text-moon hover:border-photon/35 hover:bg-photon/[0.08] hover:text-white",
     danger:
       "border-rose-400/20 bg-rose-400/[0.06] text-rose-200 hover:border-rose-300/45 hover:bg-rose-400/[0.12]",
   };

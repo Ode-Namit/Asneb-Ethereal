@@ -8,19 +8,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        space: "#050816",
-        midnight: "#0B1120",
-        quantum: "#7C3AED",
-        photon: "#00D4FF",
-        starlight: "#E2E8F0",
+        space: "#070712",
+        midnight: "#10131F",
+        quantum: "#B99CFF",
+        photon: "#8BE9FF",
+        starlight: "#F5F0E8",
+        pearl: "#FFFAF0",
+        moon: "#DFE7F3",
+        aureate: "#F6D78A",
+        aurora: "#F8B8D9",
       },
       fontFamily: {
-        sans: ["var(--font-space)", "Inter", "sans-serif"],
+        sans: ["var(--font-sans)", "Inter", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
       boxShadow: {
-        neon: "0 0 28px rgba(0, 212, 255, 0.18)",
-        violet: "0 0 30px rgba(124, 58, 237, 0.2)",
+        neon: "0 0 32px rgba(139, 233, 255, 0.18)",
+        violet: "0 0 34px rgba(185, 156, 255, 0.2)",
+        halo: "0 20px 70px rgba(246, 215, 138, 0.12)",
       },
       animation: {
         "spin-slow": "spin 18s linear infinite",

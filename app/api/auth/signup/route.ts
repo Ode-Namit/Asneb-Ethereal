@@ -7,13 +7,9 @@ import {
 
 export const runtime = "nodejs";
 
-function getAllowedUsers() {
-  return new Set(
-    (process.env.ALLOWED_USERS ?? "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean),
-  );
+function getMaxPublicUsers() {
+  const parsed = Number(process.env.MAX_PUBLIC_USERS ?? "5");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
 }
 
 export async function POST(request: Request) {
@@ -42,14 +38,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const allowedUsers = getAllowedUsers();
-  if (!allowedUsers.has(email)) {
-    return NextResponse.json(
-      { error: "This identity is not authorized for the workstation." },
-      { status: 403 },
-    );
-  }
-
   const adminEmail = process.env.POCKETBASE_SUPERUSER_EMAIL;
   const adminPassword = process.env.POCKETBASE_SUPERUSER_PASSWORD;
 
@@ -67,6 +55,16 @@ export async function POST(request: Request) {
         .collection("_superusers")
         .authWithPassword(adminEmail, adminPassword),
     );
+    const maxUsers = getMaxPublicUsers();
+    const users = await runPocketBaseRequest("Count public users", () =>
+      pb.collection("users").getList(1, 1, { fields: "id" }),
+    );
+    if (users.totalItems >= maxUsers) {
+      return NextResponse.json(
+        { error: "Maximum account capacity reached." },
+        { status: 403 },
+      );
+    }
     await runPocketBaseRequest("Create authorized user", () =>
       pb.collection("users").create({
         email,
@@ -92,7 +90,7 @@ export async function POST(request: Request) {
         error:
           status === 400
             ? "That account already exists or the credentials were rejected."
-            : "The workstation could not create the account.",
+            : "The sanctuary could not create the account.",
       },
       { status },
     );

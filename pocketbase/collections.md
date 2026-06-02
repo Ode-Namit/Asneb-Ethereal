@@ -1,10 +1,18 @@
 # PocketBase Collection Configuration
 
-Create these collections in the PocketBase Admin UI before starting the Next.js app. The application uses PocketBase as the single backend for authentication, metadata, file storage, and reading progress.
+ASNEB uses PocketBase as the canonical local-first backend for authentication,
+metadata, PDF files, reading progress, notes, highlights, and AI reflection
+history.
 
-## 1. `users`
+Apply the bundled migrations first:
 
-Use the built-in auth collection. Keep the standard auth fields and disable public creation by setting the **Create rule** to locked (`null`). Registration goes through `/api/auth/signup`, where `ALLOWED_USERS` is validated before the server creates the user with PocketBase superuser credentials.
+```bash
+./pocketbase migrate up
+```
+
+## `users`
+
+Use the built-in auth collection.
 
 Recommended rules:
 
@@ -16,9 +24,31 @@ Recommended rules:
 | Update | `id = @request.auth.id` |
 | Delete | `id = @request.auth.id` |
 
-## 2. `folders`
+Public account creation goes through `/api/auth/signup`, where the Next.js
+server authenticates as a PocketBase superuser, counts existing users, and
+enforces `MAX_PUBLIC_USERS`.
 
-Create a base collection with these fields:
+The `1780332000_enable_public_auth_otp.js` migration enables email OTP for the
+auth collection:
+
+| Setting | Value |
+| --- | --- |
+| Enabled | `true` |
+| Length | `6` |
+| Duration | `300` seconds |
+
+Configure SMTP in PocketBase settings before using OTP or password recovery.
+For password resets, point the reset email template action URL at:
+
+```txt
+http://localhost:3000/reset-password?token={TOKEN}
+```
+
+Use your deployed app URL in production.
+
+## `folders`
+
+The UI calls these records realms.
 
 | Field | Type | Configuration |
 | --- | --- | --- |
@@ -26,40 +56,70 @@ Create a base collection with these fields:
 | `parent` | Relation | Single relation to `folders`, optional |
 | `user` | Relation | Single relation to `users`, required |
 
-API rules for list, view, update, and delete:
+Rules:
 
 ```txt
-user = @request.auth.id
+list/view/update/delete: user = @request.auth.id
+create: @request.auth.id != "" && @request.body.user = @request.auth.id
 ```
 
-Create rule:
+Moves update only the optional `parent` relation. Rename updates only `name`.
+
+## `books`
+
+The UI calls these records PDFs or reading vessels.
+
+| Field | Type | Configuration |
+| --- | --- | --- |
+| `title` | Text | Required, min 1, max 180 |
+| `file` | File | Required, max files 1, MIME type `application/pdf` |
+| `folder` | Relation | Single relation to `folders`, optional |
+| `user` | Relation | Single relation to `users`, required |
+
+Rules:
 
 ```txt
-@request.auth.id != "" && @request.body.user = @request.auth.id
+list/view/update/delete: user = @request.auth.id
+create: @request.auth.id != "" && @request.body.user = @request.auth.id
 ```
 
-## Research Workstation Collections
+Moves update only the optional `folder` relation. Rename updates only `title`,
+so PocketBase file references remain intact.
 
-Apply the bundled migrations to create the persistent research layer:
+## `reading_progress`
 
-```bash
-./pocketbase migrate up
+| Field | Type | Configuration |
+| --- | --- | --- |
+| `book` | Relation | Single relation to `books`, required |
+| `user` | Relation | Single relation to `users`, required |
+| `last_page` | Number | Required integer, min 1 |
+
+Unique index:
+
+```sql
+CREATE UNIQUE INDEX idx_reading_progress_book_user
+ON reading_progress (book, user)
 ```
 
-The migration creates five user-scoped collections. Their list, view, update,
-and delete rules are:
+Rules:
 
 ```txt
-user = @request.auth.id
+list/view/update/delete: user = @request.auth.id
+create: @request.auth.id != "" && @request.body.user = @request.auth.id
 ```
 
-Their create rule is:
+## Research Memory Collections
+
+The persistent memory layer is user-scoped. Each collection uses:
 
 ```txt
-@request.auth.id != "" && @request.body.user = @request.auth.id
+list/view/update/delete: user = @request.auth.id
+create: @request.auth.id != "" && @request.body.user = @request.auth.id
 ```
 
 ### `highlights`
+
+The UI calls these memory fragments.
 
 | Field | Type | Configuration |
 | --- | --- | --- |
@@ -81,70 +141,17 @@ Stores inline, sticky, citation, and formula notes with optional PDF anchors.
 
 ### `ai_analyses`
 
-Stores tutor mode, selected evidence, Markdown response, and provider.
+Stores companion mode, selected passage, Markdown response, and provider.
 
 ### `document_pages`
 
-Stores background-indexed PDF page text for instant current-document and global
-research search.
+Stores background-indexed PDF page text for current-document and global search.
 
-### Recursive deletion
+## Recursive Deletion
 
 The dashboard sends authenticated removals through `/api/library/delete`.
 The route deletes book-linked `highlights`, `bookmarks`, `notes`, `ai_analyses`,
-`reading_progress`, and `document_pages` records before deleting a book. Folder
+`reading_progress`, and `document_pages` records before deleting a book. Realm
 deletion walks nested folders from the leaves upward and removes contained books
-through the same cleanup path. PocketBase removes the PDF storage object when its
-owning `books` record is deleted.
-
-## 3. `books`
-
-Create a base collection with these fields:
-
-| Field | Type | Configuration |
-| --- | --- | --- |
-| `title` | Text | Required, min 1, max 180 |
-| `file` | File | Required, max files 1, max size as appropriate, MIME type `application/pdf` |
-| `folder` | Relation | Single relation to `folders`, optional |
-| `user` | Relation | Single relation to `users`, required |
-
-API rules for list, view, update, and delete:
-
-```txt
-user = @request.auth.id
-```
-
-Create rule:
-
-```txt
-@request.auth.id != "" && @request.body.user = @request.auth.id
-```
-
-## 4. `reading_progress`
-
-Create a base collection with these fields:
-
-| Field | Type | Configuration |
-| --- | --- | --- |
-| `book` | Relation | Single relation to `books`, required |
-| `user` | Relation | Single relation to `users`, required |
-| `last_page` | Number | Required, integer only, min 1 |
-
-Add a unique index to prevent duplicate progress records:
-
-```sql
-CREATE UNIQUE INDEX idx_reading_progress_book_user
-ON reading_progress (book, user)
-```
-
-API rules for list, view, update, and delete:
-
-```txt
-user = @request.auth.id
-```
-
-Create rule:
-
-```txt
-@request.auth.id != "" && @request.body.user = @request.auth.id
-```
+through the same cleanup path. PocketBase removes the PDF storage object when
+its owning `books` record is deleted.

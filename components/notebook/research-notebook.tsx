@@ -258,10 +258,10 @@ export function ResearchNotebook() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-space text-slate-200">
+    <main className="spatial-root relative min-h-screen overflow-hidden bg-space text-slate-200">
       <AmbientBackground compact />
-      <div className="relative z-10">
-        <header className="flex h-[72px] items-center gap-3 border-b border-slate-700/30 bg-slate-950/45 px-4 backdrop-blur-xl sm:px-6">
+      <div className="spatial-layer relative z-10">
+        <header className="floating-glass flex h-[72px] items-center gap-3 border-b border-pearl/10 px-4 sm:px-6">
           <button
             aria-label="Return to dashboard"
             className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-2 text-slate-300 transition hover:border-cyan-300/40 hover:text-cyan-100"
@@ -282,13 +282,13 @@ export function ResearchNotebook() {
         <div className="mx-auto max-w-7xl px-4 pb-12 pt-7 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
-              <div className="hud-label">Persistent Research Archive</div>
+              <div className="hud-label">Persistent Memory Archive</div>
               <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-white">
-                Research Notebook
+                Memory Atlas
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">
-                A global view of preserved evidence, annotations, tutor
-                syntheses, and searchable textbook coordinates.
+                A global view of preserved fragments, annotations, companion
+                syntheses, and searchable PDF coordinates.
               </p>
             </div>
           </div>
@@ -302,18 +302,18 @@ export function ResearchNotebook() {
               },
               {
                 icon: MessageSquareText,
-                label: "Research notes",
+                label: "Memory notes",
                 value: notes.length,
               },
               {
                 icon: Sparkles,
-                label: "Tutor analyses",
+                label: "Companion reflections",
                 value: analyses.length,
               },
               { icon: Flame, label: "Daily streak", value: `${streak}d` },
             ].map(({ icon: Icon, label, value }) => (
               <div
-                className="glass-panel rounded-xl p-4"
+                className="glass-panel spatial-panel cinematic-reveal rounded-xl p-4"
                 key={String(label)}
               >
                 <Icon className="h-4 w-4 text-cyan-300/80" />
@@ -325,7 +325,7 @@ export function ResearchNotebook() {
             ))}
           </div>
 
-          <div className="glass-panel mt-6 rounded-xl p-4">
+          <div className="glass-panel spatial-panel mt-6 rounded-xl p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/65" />
               <input
@@ -353,7 +353,7 @@ export function ResearchNotebook() {
                 onChange={(event) => setFolderFilter(event.target.value)}
                 value={folderFilter}
               >
-                <option value="all">All folders</option>
+                <option value="all">All realms</option>
                 {folders.map((folder) => (
                   <option key={folder.id} value={folder.id}>
                     {folder.name}
@@ -386,9 +386,9 @@ export function ResearchNotebook() {
           <div className="mt-6 flex flex-wrap gap-1.5">
             {(
               [
-                ["highlights", Highlighter, "Highlights"],
+                ["highlights", Highlighter, "Fragments"],
                 ["notes", MessageSquareText, "Notes"],
-                ["analyses", Sparkles, "AI Analyses"],
+                ["analyses", Sparkles, "AI Reflections"],
                 ["search", FileSearch, "PDF Search"],
               ] as const
             ).map(([item, Icon, label]) => (
@@ -419,7 +419,7 @@ export function ResearchNotebook() {
                 const color = getHighlightColor(highlight.color);
                 return (
                   <motion.div
-                    className="glass-panel rounded-xl p-4"
+                    className="glass-panel spatial-panel rounded-xl p-4"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     key={highlight.id}
@@ -441,7 +441,7 @@ export function ResearchNotebook() {
                       type="button"
                     >
                       <div className="hud-label text-[0.46rem] text-cyan-200/65">
-                        {book?.title ?? "Research PDF"}
+                        {book?.title ?? "Reading PDF"}
                       </div>
                       <p className="mt-2 line-clamp-5 text-xs leading-5 text-slate-300">
                         {highlight.selected_text}
@@ -475,7 +475,7 @@ export function ResearchNotebook() {
                         type="button"
                       >
                         <Sparkles className="h-3.5 w-3.5" />
-                        Ask tutor
+                        Ask companion
                       </button>
                       <button
                         aria-label="Delete highlight"
@@ -491,7 +491,7 @@ export function ResearchNotebook() {
               })
             ) : tab === "notes" ? (
               visibleNotes.map((note) => (
-                <div className="glass-panel rounded-xl p-4" key={note.id}>
+                <div className="glass-panel spatial-panel rounded-xl p-4" key={note.id}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="hud-label text-[0.48rem] text-amber-200/75">
                       {note.kind} // PAGE {note.page}
@@ -517,7 +517,7 @@ export function ResearchNotebook() {
             ) : tab === "analyses" ? (
               visibleAnalyses.map((analysis) => (
                 <button
-                  className="glass-panel rounded-xl p-4 text-left transition hover:border-violet-300/35"
+                  className="glass-panel spatial-panel rounded-xl p-4 text-left transition hover:border-violet-300/35"
                   key={analysis.id}
                   onClick={() => openArtifact(analysis.book, analysis.page)}
                   type="button"
@@ -538,7 +538,7 @@ export function ResearchNotebook() {
             ) : (
               pageMatches.map((page) => (
                 <button
-                  className="glass-panel rounded-xl p-4 text-left transition hover:border-cyan-300/35"
+                  className="glass-panel spatial-panel rounded-xl p-4 text-left transition hover:border-cyan-300/35"
                   key={page.id}
                   onClick={() => openArtifact(page.book, page.page)}
                   type="button"
@@ -560,12 +560,12 @@ export function ResearchNotebook() {
                 (tab === "notes" && visibleNotes.length === 0) ||
                 (tab === "analyses" && visibleAnalyses.length === 0) ||
                 (tab === "search" && !searching && pageMatches.length === 0)) && (
-                <div className="glass-panel col-span-full flex min-h-52 flex-col items-center justify-center rounded-xl border-dashed p-8 text-center">
+                <div className="glass-panel spatial-panel col-span-full flex min-h-52 flex-col items-center justify-center rounded-xl border-dashed p-8 text-center">
                   <CalendarDays className="h-7 w-7 text-cyan-300/45" />
                   <p className="mt-4 max-w-md text-xs leading-6 text-slate-500">
-                    No research artifacts match this coordinate. Open a PDF and
-                    preserve evidence, notes, or tutor analyses to populate the
-                    notebook.
+                    No memory artifacts match this coordinate. Open a PDF and
+                    preserve fragments, notes, or companion reflections to populate the
+                    atlas.
                   </p>
                 </div>
               )}

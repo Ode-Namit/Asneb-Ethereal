@@ -73,6 +73,7 @@ import type {
   ReadingProgressRecord,
   ResearchNoteKind,
   TutorStreamEvent,
+  TutorRequestContext,
 } from "@/lib/types";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -98,6 +99,12 @@ const promptActions: Array<{
     icon: TextQuote,
   },
   {
+    mode: "learning",
+    shortLabel: "Learn",
+    label: "Explain like I am learning",
+    icon: BookOpen,
+  },
+  {
     mode: "deconstruct",
     shortLabel: "Deconstruct",
     label: "Deconstruct formula",
@@ -110,6 +117,12 @@ const promptActions: Array<{
     icon: Highlighter,
   },
   {
+    mode: "insights",
+    shortLabel: "Insights",
+    label: "Extract key insights",
+    icon: Sparkles,
+  },
+  {
     mode: "derivation",
     shortLabel: "Derive",
     label: "Develop derivation",
@@ -120,6 +133,30 @@ const promptActions: Array<{
     shortLabel: "Intuition",
     label: "Build intuition",
     icon: Atom,
+  },
+  {
+    mode: "theorem",
+    shortLabel: "Theorem",
+    label: "Build theorem intuition",
+    icon: FileSearch,
+  },
+  {
+    mode: "formula",
+    shortLabel: "Formula",
+    label: "Explain formula",
+    icon: Sigma,
+  },
+  {
+    mode: "advanced",
+    shortLabel: "Advanced",
+    label: "Advanced analysis",
+    icon: FlaskConical,
+  },
+  {
+    mode: "reflection",
+    shortLabel: "Reflect",
+    label: "Generate reflection",
+    icon: Sparkles,
   },
   {
     mode: "problem-solving",
@@ -135,25 +172,26 @@ const toolbarItems: Array<{
   tool: ReaderTool;
 }> = [
   { tool: "contents", label: "Table of contents", icon: BookOpen },
-  { tool: "search", label: "Search PDF and research", icon: Search },
-  { tool: "highlights", label: "Research highlights", icon: Highlighter },
+  { tool: "search", label: "Search PDF and memory", icon: Search },
+  { tool: "highlights", label: "Memory fragments", icon: Highlighter },
   { tool: "notes", label: "Notes panel", icon: MessageSquareText },
   { tool: "bookmarks", label: "Page bookmarks", icon: Bookmark },
   { tool: "history", label: "AI analysis history", icon: Bot },
   { tool: "progress", label: "Reading progress timeline", icon: Activity },
-  { tool: "topology", label: "Research graph", icon: Network },
-  { tool: "notebook", label: "Research notebook", icon: NotebookPen },
+  { tool: "topology", label: "Memory graph", icon: Network },
+  { tool: "notebook", label: "Memory atlas", icon: NotebookPen },
 ];
 
 function PhysicsLoader({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 text-center">
-      <div className="relative h-14 w-14">
-        <div className="absolute inset-0 animate-spin rounded-full border border-cyan-300/50 border-t-transparent" />
-        <div className="absolute inset-2 animate-[spin_1.2s_linear_infinite_reverse] rounded-full border border-violet-300/60 border-b-transparent" />
-        <Atom className="absolute inset-[17px] h-5 w-5 text-cyan-200" />
+      <div className="relative h-16 w-16">
+        <div className="absolute inset-0 rounded-full border border-aureate/20 bg-pearl/[0.03] shadow-halo" />
+        <div className="absolute inset-1 animate-spin rounded-full border border-aureate/50 border-t-transparent" />
+        <div className="absolute inset-3 animate-[spin_1.35s_linear_infinite_reverse] rounded-full border border-photon/55 border-b-transparent" />
+        <Atom className="absolute inset-[22px] h-5 w-5 text-aureate" />
       </div>
-      <div className="hud-label text-cyan-200/70">{label}</div>
+      <div className="hud-label text-aureate/75">{label}</div>
     </div>
   );
 }
@@ -174,10 +212,12 @@ async function readTutorStream(
     const payload = (await response.json().catch(() => ({}))) as {
       error?: string;
     };
-    throw new Error(payload.error ?? `Tutor request failed with HTTP ${response.status}.`);
+    throw new Error(
+      payload.error ?? `Companion request failed with HTTP ${response.status}.`,
+    );
   }
   if (!response.body) {
-    throw new Error("The tutor stream opened without a readable response body.");
+    throw new Error("The companion stream opened without a readable response body.");
   }
 
   const reader = response.body.getReader();
@@ -212,7 +252,7 @@ async function readTutorStream(
   }
 
   if (!completed) {
-    throw new Error("The tutor stream ended before reporting a completed response.");
+    throw new Error("The companion stream ended before reporting a completed response.");
   }
   return completed;
 }
@@ -248,28 +288,28 @@ function AiPanel({
     <AnimatePresence>
       {open && (
         <motion.aside
-          className="fixed inset-0 z-50 flex w-full flex-col border-l border-cyan-300/20 bg-[#07101d]/95 shadow-[-24px_0_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl sm:left-auto sm:w-[420px] xl:relative xl:z-20 xl:w-[390px] xl:shrink-0"
+          className="companion-breath fixed inset-0 z-50 flex w-full flex-col border-l border-pearl/10 shadow-[-24px_0_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:left-auto sm:w-[420px] xl:relative xl:z-20 xl:w-[390px] xl:shrink-0"
           initial={{ x: "100%" }}
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
           transition={{ type: "spring", damping: 29, stiffness: 270 }}
         >
-          <div className="border-b border-slate-700/35 px-4 py-4">
+          <div className="border-b border-pearl/10 px-4 py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg border border-cyan-300/25 bg-cyan-400/[0.08] p-2">
-                  <Bot className="h-4 w-4 text-cyan-200" />
+                <div className="rounded-lg border border-aureate/25 bg-aureate/[0.08] p-2 shadow-halo">
+                  <Bot className="h-4 w-4 text-aureate" />
                 </div>
                 <div>
-                  <div className="hud-label text-[0.53rem]">Tutor Subsystem</div>
+                  <div className="hud-label text-[0.53rem]">Companion Presence</div>
                   <div className="mt-1 text-sm font-semibold text-white">
-                    Unicorn Analysis
+                    Reflective Analysis
                   </div>
                 </div>
               </div>
               <button
                 aria-label="Close AI assistant"
-                className="rounded-md p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-white"
+                className="rounded-md p-1.5 text-slate-500 transition hover:bg-pearl/[0.06] hover:text-white"
                 onClick={onClose}
                 type="button"
               >
@@ -280,7 +320,7 @@ function AiPanel({
 
           <div className="flex-1 overflow-y-auto p-4">
             {selectedText && (
-              <div className="rounded-lg border border-violet-300/20 bg-violet-400/[0.05] p-3.5">
+              <div className="spatial-panel rounded-lg border border-violet-300/20 bg-violet-400/[0.05] p-3.5">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-violet-300" />
                   <div className="hud-label text-[0.49rem]">
@@ -343,7 +383,7 @@ function AiPanel({
                   <PhysicsLoader label="Resolving concept" />
                 </div>
               ) : (
-                <div className="markdown-body text-[0.82rem] leading-6 text-slate-300">
+                <div className="markdown-body rounded-xl border border-pearl/10 bg-pearl/[0.035] p-3 text-[0.82rem] leading-6 text-slate-300 shadow-[0_0_42px_rgba(246,215,138,0.06)]">
                   <ReactMarkdown
                     rehypePlugins={[rehypeKatex]}
                     remarkPlugins={[remarkGfm, remarkMath]}
@@ -356,10 +396,10 @@ function AiPanel({
             </div>
           </div>
 
-          <div className="border-t border-slate-700/35 px-4 py-3">
+          <div className="border-t border-pearl/10 px-4 py-3">
             <div className="flex items-center justify-between text-[0.63rem] text-slate-600">
               <span className="font-mono uppercase tracking-widest">
-                {provider || "Tutor standby"}
+                {provider || "Companion standby"}
               </span>
               <span
                 className={`flex items-center gap-1.5 ${
@@ -395,19 +435,41 @@ function getSelectionAnchor(range: Range, content: HTMLElement): PdfAnchor | nul
     return null;
   }
 
-  const prefix = range.cloneRange();
-  prefix.selectNodeContents(content);
-  prefix.setEnd(range.startContainer, range.startOffset);
-  const start = prefix.toString().length;
+  if (
+    !content.contains(range.startContainer) ||
+    !content.contains(range.endContainer)
+  ) {
+    return null;
+  }
+
+  let start = 0;
+  try {
+    const prefix = range.cloneRange();
+    prefix.selectNodeContents(content);
+    prefix.setEnd(range.startContainer, range.startOffset);
+    start = prefix.toString().length;
+  } catch (error) {
+    console.warn("[ASNEB] Selection anchor could not be mapped", error);
+    return null;
+  }
+
+  const clamp = (value: number) => Math.max(0, Math.min(1, value));
   const end = start + range.toString().length;
   const rects = Array.from(range.getClientRects())
     .filter((rect) => rect.width > 1 && rect.height > 1)
-    .map((rect) => ({
-      left: Math.max(0, (rect.left - contentRect.left) / contentRect.width),
-      top: Math.max(0, (rect.top - contentRect.top) / contentRect.height),
-      width: Math.min(1, rect.width / contentRect.width),
-      height: Math.min(1, rect.height / contentRect.height),
-    }));
+    .map((rect) => {
+      const left = clamp((rect.left - contentRect.left) / contentRect.width);
+      const top = clamp((rect.top - contentRect.top) / contentRect.height);
+      const right = clamp((rect.right - contentRect.left) / contentRect.width);
+      const bottom = clamp((rect.bottom - contentRect.top) / contentRect.height);
+      return {
+        left,
+        top,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+      };
+    })
+    .filter((rect) => rect.width > 0 && rect.height > 0);
 
   return rects.length ? { start, end, rects } : null;
 }
@@ -473,7 +535,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
   const [aiText, setAiText] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [aiProvider, setAiProvider] = useState("");
-  const [aiStatus, setAiStatus] = useState("Tutor standby.");
+  const [aiStatus, setAiStatus] = useState("Companion standby.");
   const [aiError, setAiError] = useState("");
   const [aiCompleted, setAiCompleted] = useState(false);
   const [aiFallback, setAiFallback] = useState(false);
@@ -533,7 +595,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           return;
         }
 
-        setPdfError("This document could not be loaded from the observatory.");
+        setPdfError("This document could not be loaded from the sanctuary.");
       } finally {
         setLoading(false);
       }
@@ -669,13 +731,12 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
         }
         const text = selection.toString().trim();
         const range = selection.getRangeAt(0);
+        const rangeContainer =
+          range.commonAncestorContainer instanceof HTMLElement
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer.parentElement;
         const pageElement =
-          range.commonAncestorContainer.parentElement?.closest<HTMLElement>(
-            "[data-page]",
-          ) ??
-          (range.commonAncestorContainer instanceof HTMLElement
-            ? range.commonAncestorContainer.closest<HTMLElement>("[data-page]")
-            : null);
+          rangeContainer?.closest<HTMLElement>("[data-page]") ?? null;
         const content =
           pageElement?.querySelector<HTMLElement>("[data-pdf-page-content]");
         const anchor = content ? getSelectionAnchor(range, content) : null;
@@ -701,6 +762,51 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
     };
   }, []);
 
+  const buildTutorContext = useCallback(
+    (page: number): TutorRequestContext => {
+      const nearbyPages = research.pages
+        .filter((item) => Math.abs(item.page - page) <= 1)
+        .sort((left, right) => left.page - right.page)
+        .map((item) => `Page ${item.page}: ${item.content}`)
+        .join("\n\n");
+      const chapterTitle = outline
+        .filter((entry) => entry.page <= page)
+        .sort((left, right) => right.page - left.page)[0]?.title;
+
+      return {
+        bookTitle: book?.title,
+        chapterTitle,
+        currentPage: page,
+        surroundingText: nearbyPages,
+        highlights: research.currentHighlights
+          .filter((highlight) => Math.abs(highlight.page - page) <= 1)
+          .slice(0, 6)
+          .map((highlight) => `Page ${highlight.page}: ${highlight.selected_text}`),
+        notes: research.currentNotes
+          .filter((note) => Math.abs(note.page - page) <= 1)
+          .slice(0, 6)
+          .map((note) => `Page ${note.page} ${note.kind}: ${note.content}`),
+        previousAnalyses: research.currentAnalyses
+          .slice(0, 4)
+          .map(
+            (analysis) =>
+              `${analysis.mode} on page ${analysis.page}: ${analysis.response.slice(
+                0,
+                900,
+              )}`,
+          ),
+      };
+    },
+    [
+      book?.title,
+      outline,
+      research.currentAnalyses,
+      research.currentHighlights,
+      research.currentNotes,
+      research.pages,
+    ],
+  );
+
   const analyzeSelection = useCallback(
     async (mode: PromptMode, text: string, page = activePage) => {
       const pb = getPocketBase();
@@ -710,7 +816,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
       setAiText(text);
       setAiResponse("");
       setAiProvider("");
-      setAiStatus("Opening tutor stream.");
+      setAiStatus("Opening companion stream.");
       setAiError("");
       setAiCompleted(false);
       setAiFallback(false);
@@ -725,7 +831,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
             Accept: "text/event-stream",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ mode, text }),
+          body: JSON.stringify({ context: buildTutorContext(page), mode, text }),
         });
         const data = await readTutorStream(response, (event) => {
           if (event.type === "delta") {
@@ -756,11 +862,11 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
               setAiResponse(cleanTutorResponse(event.partial));
             }
             setAiError(event.message);
-            setAiStatus("Tutor response could not be completed reliably.");
+            setAiStatus("Companion response could not be completed reliably.");
           }
         });
         if (!data.completed || !data.analysis) {
-          throw new Error("The tutor did not report a complete analysis.");
+          throw new Error("The companion did not report a complete reflection.");
         }
         await research.saveAnalysis({
           mode,
@@ -770,19 +876,19 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           selectedText: text,
         });
       } catch (analysisError) {
-        console.error("[ASNEB] Tutor analysis request failed", analysisError);
+        console.error("[ASNEB] Companion analysis request failed", analysisError);
         setAiError(
           analysisError instanceof Error
             ? analysisError.message
-            : "The tutor subsystem could not respond.",
+            : "The companion could not respond.",
         );
-        setAiStatus("Tutor response could not be completed reliably.");
+        setAiStatus("Companion response could not be completed reliably.");
         setAiCompleted(false);
       } finally {
         setStreaming(false);
       }
     },
-    [activePage, research],
+    [activePage, buildTutorContext, research],
   );
 
   function openStoredAnalysis(analysis: AiAnalysisRecord) {
@@ -811,7 +917,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           }`;
     const content =
       kind === "note"
-        ? window.prompt("Attach a research note to this evidence:", "")
+        ? window.prompt("Attach a memory note to this passage:", "")
         : defaultText;
     if (content?.trim()) {
       void research.addNote({
@@ -934,12 +1040,16 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
   }
 
   return (
-    <main className="relative flex h-screen flex-col overflow-hidden bg-space text-slate-200">
+    <main
+      className={`spatial-root relative flex h-screen flex-col overflow-hidden bg-space text-slate-200 ${
+        fullscreen ? "reader-focus" : ""
+      }`}
+    >
       <AmbientBackground compact />
-      <header className="relative z-30 flex h-[64px] shrink-0 items-center gap-3 border-b border-slate-700/35 bg-slate-950/60 px-3 backdrop-blur-xl sm:px-4">
+      <header className="floating-glass relative z-30 flex h-[64px] shrink-0 items-center gap-3 border-b border-pearl/10 px-3 sm:px-4">
         <button
-          aria-label="Return to observatory"
-          className="rounded-lg border border-slate-700/35 bg-slate-900/35 p-2 text-slate-400 transition hover:border-cyan-300/40 hover:text-cyan-200"
+          aria-label="Return to sanctuary"
+          className="rounded-lg border border-pearl/10 bg-pearl/[0.04] p-2 text-slate-400 transition hover:border-aureate/40 hover:text-aureate"
           onClick={() => router.push("/dashboard")}
           type="button"
         >
@@ -951,16 +1061,16 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
         <div className="mx-1 h-7 w-px bg-slate-700/40" />
         <div className="min-w-0 flex-1">
           <div className="hud-label hidden text-[0.48rem] sm:block">
-            Active Analysis Document
+            Active Reading Vessel
           </div>
           <div className="truncate text-xs font-semibold text-slate-200 sm:mt-1 sm:text-sm">
             {book?.title ?? "Calibrating reader..."}
           </div>
         </div>
-        <div className="hidden items-center gap-1 rounded-lg border border-slate-700/35 bg-slate-900/35 p-1 sm:flex">
+        <div className="hidden items-center gap-1 rounded-lg border border-pearl/10 bg-pearl/[0.04] p-1 sm:flex">
           <button
             aria-label="Previous page"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-slate-400 transition hover:bg-pearl/[0.07] hover:text-white disabled:opacity-30"
             disabled={activePage <= 1}
             onClick={() => navigateTo(activePage - 1)}
             type="button"
@@ -972,7 +1082,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           </div>
           <button
             aria-label="Next page"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-30"
+            className="rounded-md p-1.5 text-slate-400 transition hover:bg-pearl/[0.07] hover:text-white disabled:opacity-30"
             disabled={!numPages || activePage >= numPages}
             onClick={() => navigateTo(activePage + 1)}
             type="button"
@@ -985,7 +1095,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           className={`hidden rounded-lg border p-2 transition sm:block ${
             research.currentBookmarks.some((item) => item.page === activePage)
               ? "border-amber-300/40 bg-amber-300/[0.1] text-amber-200"
-              : "border-slate-700/35 bg-slate-900/35 text-slate-400 hover:text-amber-200"
+              : "border-pearl/10 bg-pearl/[0.04] text-slate-400 hover:text-amber-200"
           }`}
           onClick={() => void research.toggleBookmark(activePage)}
           type="button"
@@ -994,7 +1104,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
         </button>
         <button
           aria-label={fullscreen ? "Exit focus mode" : "Enter focus mode"}
-          className="hidden rounded-lg border border-slate-700/35 bg-slate-900/35 p-2 text-slate-400 transition hover:border-cyan-300/40 hover:text-cyan-200 sm:block"
+          className="hidden rounded-lg border border-pearl/10 bg-pearl/[0.04] p-2 text-slate-400 transition hover:border-cyan-300/40 hover:text-cyan-200 sm:block"
           onClick={() => setFullscreen((value) => !value)}
           type="button"
         >
@@ -1006,7 +1116,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
         </button>
         <button
           aria-label="Open AI assistant"
-          className="rounded-lg border border-cyan-300/30 bg-cyan-400/[0.08] p-2 text-cyan-200 transition hover:bg-cyan-400/[0.14] hover:shadow-neon"
+          className="rounded-lg border border-aureate/30 bg-aureate/[0.09] p-2 text-aureate transition hover:bg-aureate/[0.15] hover:shadow-halo"
           onClick={() => setPanelOpen(true)}
           type="button"
         >
@@ -1014,7 +1124,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
         </button>
         <button
           aria-label="Sign out"
-          className="hidden rounded-lg border border-slate-700/35 bg-slate-900/35 p-2 text-slate-500 transition hover:border-rose-300/30 hover:text-rose-200 sm:block"
+          className="hidden rounded-lg border border-pearl/10 bg-pearl/[0.04] p-2 text-slate-500 transition hover:border-rose-300/30 hover:text-rose-200 sm:block"
           onClick={signOut}
           type="button"
         >
@@ -1024,7 +1134,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
 
       <div className="relative z-10 flex min-h-0 flex-1">
         {!fullscreen && (
-          <aside className="hidden w-[52px] shrink-0 flex-col items-center overflow-y-auto border-r border-slate-700/30 bg-slate-950/40 py-3 md:flex">
+          <aside className="floating-glass hidden w-[52px] shrink-0 flex-col items-center overflow-y-auto border-r border-pearl/10 py-3 md:flex">
             {toolbarItems.map(({ icon: Icon, label, tool }) => (
               <button
                 aria-label={label}
@@ -1077,11 +1187,11 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
 
         <section className="relative flex min-w-0 flex-1 flex-col">
           {!fullscreen && (
-            <div className="flex h-9 shrink-0 items-center justify-between border-b border-slate-700/25 bg-slate-950/25 px-4">
+            <div className="floating-glass flex h-9 shrink-0 items-center justify-between border-b border-pearl/10 px-4">
               <div className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
                 <span className="hud-label text-[0.47rem] text-emerald-200/70">
-                  Text layer armed // research persistence online
+                  Text layer alive // memory persistence online
                 </span>
               </div>
               <div className="hidden font-mono text-[0.58rem] tracking-widest text-slate-600 sm:block">
@@ -1092,15 +1202,15 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
 
           <div
             ref={scrollRef}
-            className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-3 py-5 sm:px-5"
+            className="min-h-0 flex-1 overflow-y-auto scroll-smooth px-3 py-6 sm:px-5"
           >
             <div ref={viewerRef} className="pdf-document mx-auto w-fit">
               {loading ? (
-                <div className="flex min-h-[68vh] min-w-[280px] items-center justify-center">
-                  <PhysicsLoader label="Loading research paper" />
+                <div className="spatial-panel flex min-h-[68vh] min-w-[280px] items-center justify-center rounded-xl border border-pearl/10 bg-pearl/[0.035] px-10">
+                  <PhysicsLoader label="Loading reading vessel" />
                 </div>
               ) : pdfError ? (
-                <div className="glass-panel flex min-h-[360px] w-[min(90vw,620px)] flex-col items-center justify-center rounded-xl p-8 text-center">
+                <div className="glass-panel spatial-panel flex min-h-[360px] w-[min(90vw,620px)] flex-col items-center justify-center rounded-xl p-8 text-center">
                   <FileText className="h-8 w-8 text-rose-300/70" />
                   <p className="mt-5 text-sm leading-6 text-slate-300">{pdfError}</p>
                   <Button
@@ -1108,13 +1218,13 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
                     onClick={() => router.push("/dashboard")}
                     variant="ghost"
                   >
-                    Return to observatory
+                    Return to sanctuary
                   </Button>
                 </div>
               ) : (
                 <Document
                   file={fileUrl}
-                  loading={<PhysicsLoader label="Mapping PDF geometry" />}
+                  loading={<PhysicsLoader label="Gathering PDF geometry" />}
                   onLoadError={(error) => {
                     console.error("[ASNEB] PDF renderer failed", error);
                     setPdfError("The PDF renderer could not map this document.");
@@ -1132,7 +1242,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
                     );
                     return (
                       <div
-                        className="mb-5 scroll-mt-4"
+                        className="mb-7 scroll-mt-5"
                         data-page={page}
                         key={page}
                         ref={(element) => {
@@ -1144,11 +1254,11 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
                         }}
                       >
                         <div className="mb-2 flex items-center gap-2 font-mono text-[0.57rem] tracking-[0.18em] text-cyan-200/50">
-                          <span>FRAME {String(page).padStart(3, "0")}</span>
+                          <span>PAGE {String(page).padStart(3, "0")}</span>
                           <span className="h-px flex-1 bg-gradient-to-r from-cyan-300/20 to-transparent" />
                         </div>
                         <div
-                          className="relative overflow-hidden bg-white/[0.03]"
+                          className="reader-page-shell relative overflow-hidden rounded-[3px] bg-white/[0.035]"
                           data-pdf-page-content
                           style={{ minHeight: Math.round(pageWidth * 1.294), width: pageWidth }}
                         >
@@ -1188,7 +1298,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
                               style={{ height: Math.round(pageWidth * 1.294) }}
                             >
                               <div className="hud-label text-slate-700">
-                                Deferred frame // {String(page).padStart(3, "0")}
+                                Deferred page // {String(page).padStart(3, "0")}
                               </div>
                             </div>
                           )}
@@ -1221,7 +1331,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
       <AnimatePresence>
         {floatingMenu && (
           <motion.div
-            className="fixed z-[70] max-w-[calc(100vw-16px)] rounded-lg border border-cyan-300/35 bg-[#07121f]/95 p-1.5 shadow-[0_0_32px_rgba(0,212,255,0.2)] backdrop-blur-2xl"
+            className="floating-glass fixed z-[70] max-w-[calc(100vw-16px)] rounded-lg border border-aureate/25 p-1.5 shadow-[0_0_42px_rgba(246,215,138,0.14)]"
             initial={{ opacity: 0, scale: 0.94, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 4 }}

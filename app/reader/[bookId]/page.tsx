@@ -11,7 +11,7 @@ const PhysicsReader = dynamic(
     ssr: false,
     loading: () => (
       <main className="flex min-h-screen items-center justify-center bg-space text-xs uppercase tracking-[0.2em] text-cyan-300">
-        Calibrating analysis console...
+        Opening reading sanctuary...
       </main>
     ),
   },

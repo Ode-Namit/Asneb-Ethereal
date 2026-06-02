@@ -65,18 +65,18 @@ const toolMeta: Record<
   },
   search: {
     icon: Search,
-    label: "Spectral Search",
-    subtitle: "Current PDF and global research index",
+    label: "Sanctuary Search",
+    subtitle: "Current PDF and global memory index",
   },
   highlights: {
     icon: Highlighter,
-    label: "Research Highlights",
-    subtitle: "Persistent evidence anchors",
+    label: "Memory Fragments",
+    subtitle: "Persistent passage anchors",
   },
   notes: {
     icon: MessageSquareText,
     label: "Notes Matrix",
-    subtitle: "Inline and sticky research notes",
+    subtitle: "Inline and sticky memory notes",
   },
   bookmarks: {
     icon: Bookmark,
@@ -85,23 +85,23 @@ const toolMeta: Record<
   },
   history: {
     icon: Bot,
-    label: "Tutor Archive",
-    subtitle: "Recent AI analysis history",
+    label: "Companion Archive",
+    subtitle: "Recent AI reflection history",
   },
   progress: {
     icon: Activity,
     label: "Progress Timeline",
-    subtitle: "Reading telemetry and session state",
+    subtitle: "Reading memory and session state",
   },
   topology: {
     icon: Network,
-    label: "Research Graph",
-    subtitle: "Current document topology",
+    label: "Memory Graph",
+    subtitle: "Current document constellation",
   },
   notebook: {
     icon: NotebookPen,
-    label: "Research Notebook",
-    subtitle: "Highlights, notes, and tutor syntheses",
+    label: "Memory Atlas",
+    subtitle: "Fragments, notes, and companion syntheses",
   },
 };
 
@@ -119,20 +119,20 @@ function PanelShell({
 
   return (
     <motion.aside
-      className="fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-cyan-300/20 bg-[#07101d]/95 shadow-[24px_0_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl sm:w-[410px] md:left-[52px]"
+      className="floating-glass fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-pearl/10 shadow-[24px_0_70px_rgba(0,0,0,0.38)] sm:w-[410px] md:left-[52px]"
       initial={{ x: "-100%" }}
       animate={{ x: 0 }}
       exit={{ x: "-100%" }}
       transition={{ type: "spring", damping: 29, stiffness: 270 }}
     >
-      <div className="border-b border-slate-700/35 px-4 py-4">
+      <div className="border-b border-pearl/10 px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg border border-cyan-300/25 bg-cyan-400/[0.08] p-2">
-              <Icon className="h-4 w-4 text-cyan-200" />
+            <div className="rounded-lg border border-aureate/25 bg-aureate/[0.08] p-2 shadow-halo">
+              <Icon className="h-4 w-4 text-aureate" />
             </div>
             <div>
-              <div className="hud-label text-[0.5rem]">Observatory Module</div>
+              <div className="hud-label text-[0.5rem]">Sanctuary Module</div>
               <div className="mt-1 text-sm font-semibold text-white">
                 {meta.label}
               </div>
@@ -140,7 +140,7 @@ function PanelShell({
           </div>
           <button
             aria-label="Close research panel"
-            className="rounded-md p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-white"
+            className="rounded-md p-1.5 text-slate-500 transition hover:bg-pearl/[0.06] hover:text-white"
             onClick={onClose}
             type="button"
           >
@@ -158,7 +158,7 @@ function PanelShell({
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-700/50 bg-slate-950/25 px-4 py-8 text-center text-xs leading-6 text-slate-500">
+    <div className="spatial-panel rounded-lg border border-dashed border-pearl/15 bg-pearl/[0.035] px-4 py-8 text-center text-xs leading-6 text-slate-500">
       {children}
     </div>
   );
@@ -180,7 +180,7 @@ function HighlightCard({
   const color = getHighlightColor(highlight.color);
 
   return (
-    <div className="rounded-lg border border-slate-700/40 bg-slate-950/35 p-3">
+    <div className="spatial-panel rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3">
       <button
         className="w-full text-left"
         onClick={() => onNavigate(highlight.page, highlight.id)}
@@ -220,7 +220,7 @@ function HighlightCard({
           type="button"
         >
           <Sparkles className="h-3.5 w-3.5" />
-          Ask tutor
+          Ask companion
         </button>
         <button
           aria-label="Delete highlight"
@@ -247,7 +247,7 @@ function NoteCard({
   onUpdate: (noteId: string, content: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-slate-700/40 bg-slate-950/35 p-3">
+    <div className="spatial-panel rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3">
       <div className="flex items-center justify-between gap-2">
         <button
           className="font-mono text-[0.61rem] uppercase tracking-widest text-amber-200/75"
@@ -526,7 +526,7 @@ export function ResearchPanel({
                       <div className="space-y-1.5">
                         {pageMatches.map((page) => (
                           <button
-                            className="w-full rounded-md border border-slate-700/35 bg-slate-950/35 px-3 py-2 text-left transition hover:border-cyan-300/30"
+                            className="spatial-panel w-full rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2 text-left transition hover:border-cyan-300/30"
                             key={page.id}
                             onClick={() => openResearchLocation(page.book, page.page)}
                             type="button"
@@ -542,11 +542,11 @@ export function ResearchPanel({
                       </div>
                     </div>
                     <div>
-                      <div className="hud-label mb-2">Research Matches</div>
+                            <div className="hud-label mb-2">Memory Matches</div>
                       <div className="space-y-1.5">
                         {visibleHighlights.slice(0, 8).map((highlight) => (
                           <button
-                            className="w-full rounded-md border border-slate-700/35 bg-slate-950/35 px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-cyan-300/30"
+                            className="spatial-panel w-full rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-cyan-300/30"
                             key={highlight.id}
                             onClick={() =>
                               openResearchLocation(
@@ -562,7 +562,7 @@ export function ResearchPanel({
                         ))}
                         {noteMatches.slice(0, 8).map((note) => (
                           <button
-                            className="w-full rounded-md border border-slate-700/35 bg-slate-950/35 px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-amber-300/30"
+                            className="spatial-panel w-full rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-amber-300/30"
                             key={note.id}
                             onClick={() => openResearchLocation(note.book, note.page)}
                             type="button"
@@ -572,12 +572,12 @@ export function ResearchPanel({
                         ))}
                         {analysisMatches.slice(0, 6).map((analysis) => (
                           <button
-                            className="w-full rounded-md border border-slate-700/35 bg-slate-950/35 px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-violet-300/30"
+                            className="spatial-panel w-full rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2 text-left text-[0.7rem] leading-5 text-slate-400 transition hover:border-violet-300/30"
                             key={analysis.id}
                             onClick={() => onOpenAnalysis(analysis)}
                             type="button"
                           >
-                            Tutor // Page {analysis.page}: {analysis.selected_text}
+                            Companion // Page {analysis.page}: {analysis.selected_text}
                           </button>
                         ))}
                       </div>
@@ -652,7 +652,7 @@ export function ResearchPanel({
                   ))
                 ) : (
                   <EmptyState>
-                    Highlight a passage in the PDF to preserve it as evidence.
+                    Highlight a passage in the PDF to preserve it as a memory fragment.
                   </EmptyState>
                 )}
               </div>
@@ -692,7 +692,7 @@ export function ResearchPanel({
                     />
                   ))
                 ) : (
-                  <EmptyState>No research notes are attached to this PDF yet.</EmptyState>
+                  <EmptyState>No memory notes are attached to this PDF yet.</EmptyState>
                 )}
               </div>
             </div>
@@ -715,7 +715,7 @@ export function ResearchPanel({
                 {currentBookmarks.length ? (
                   currentBookmarks.map((bookmark) => (
                     <div
-                      className="flex items-center rounded-md border border-slate-700/35 bg-slate-950/35 px-3 py-2"
+                      className="spatial-panel flex items-center rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2"
                       key={bookmark.id}
                     >
                       <button
@@ -747,7 +747,7 @@ export function ResearchPanel({
               {currentAnalyses.length ? (
                 currentAnalyses.map((analysis) => (
                   <button
-                    className="w-full rounded-lg border border-slate-700/40 bg-slate-950/35 p-3 text-left transition hover:border-violet-300/35"
+                    className="spatial-panel w-full rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3 text-left transition hover:border-violet-300/35"
                     key={analysis.id}
                     onClick={() => onOpenAnalysis(analysis)}
                     type="button"
@@ -767,8 +767,8 @@ export function ResearchPanel({
                 ))
               ) : (
                 <EmptyState>
-                  Tutor analyses appear here after you explain, deconstruct, or
-                  summarize selected evidence.
+                  Companion reflections appear here after you explain, deconstruct, or
+                  summarize selected passages.
                 </EmptyState>
               )}
             </div>
@@ -776,7 +776,7 @@ export function ResearchPanel({
 
           {tool === "progress" && (
             <div>
-              <div className="rounded-xl border border-cyan-300/20 bg-cyan-400/[0.05] p-4">
+              <div className="spatial-panel rounded-xl border border-cyan-300/20 bg-cyan-400/[0.05] p-4">
                 <div className="hud-label">Reading Coordinate</div>
                 <div className="mt-3 text-4xl font-semibold tracking-[-0.08em] text-white">
                   {activePage}
@@ -799,7 +799,7 @@ export function ResearchPanel({
                   ["Analyses", currentAnalyses.length],
                 ].map(([label, value]) => (
                   <div
-                    className="rounded-lg border border-slate-700/35 bg-slate-950/35 p-3"
+                    className="spatial-panel rounded-lg border border-pearl/10 bg-pearl/[0.035] p-3"
                     key={String(label)}
                   >
                     <div className="text-xl font-semibold text-white">{value}</div>
@@ -807,7 +807,7 @@ export function ResearchPanel({
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-lg border border-slate-700/35 bg-slate-950/35 p-3 text-xs leading-6 text-slate-500">
+              <div className="spatial-panel mt-4 rounded-lg border border-pearl/10 bg-pearl/[0.035] p-3 text-xs leading-6 text-slate-500">
                 Session restore is armed. The latest reading coordinate is saved
                 automatically as pages enter the active viewport.
               </div>
@@ -840,28 +840,28 @@ export function ResearchPanel({
                   </div>
                 ))}
               </div>
-              <div className="mt-5 rounded-lg border border-slate-700/35 bg-slate-950/35 p-3 text-xs leading-6 text-slate-500">
+              <div className="spatial-panel mt-5 rounded-lg border border-pearl/10 bg-pearl/[0.035] p-3 text-xs leading-6 text-slate-500">
                 {book?.title ?? "Current PDF"} is linked to{" "}
                 {currentHighlights.length + currentNotes.length + currentAnalyses.length}{" "}
-                persistent research artifacts.
+                persistent memory artifacts.
               </div>
             </div>
           )}
 
           {tool === "notebook" && (
             <div className="space-y-5">
-              <div className="rounded-lg border border-violet-300/20 bg-violet-400/[0.05] p-3">
+              <div className="spatial-panel rounded-lg border border-violet-300/20 bg-violet-400/[0.05] p-3">
                 <div className="flex items-center gap-2">
                   <NotebookPen className="h-4 w-4 text-violet-200" />
-                  <div className="hud-label text-[0.49rem]">Combined Research Log</div>
+                  <div className="hud-label text-[0.49rem]">Combined Memory Log</div>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Evidence, personal notes, and tutor syntheses for the active
+                  Fragments, personal notes, and companion syntheses for the active
                   document.
                 </p>
               </div>
               <div>
-                <div className="hud-label mb-2">Evidence</div>
+                <div className="hud-label mb-2">Fragments</div>
                 <div className="space-y-2">
                   {currentHighlights.slice(0, 6).map((highlight) => (
                     <HighlightCard
@@ -890,11 +890,11 @@ export function ResearchPanel({
                 </div>
               </div>
               <div>
-                <div className="hud-label mb-2">Tutor Syntheses</div>
+                <div className="hud-label mb-2">Companion Syntheses</div>
                 <div className="space-y-2">
                   {currentAnalyses.slice(0, 6).map((analysis) => (
                     <button
-                      className="w-full rounded-lg border border-slate-700/40 bg-slate-950/35 p-3 text-left transition hover:border-violet-300/35"
+                      className="spatial-panel w-full rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3 text-left transition hover:border-violet-300/35"
                       key={analysis.id}
                       onClick={() => onOpenAnalysis(analysis)}
                       type="button"
