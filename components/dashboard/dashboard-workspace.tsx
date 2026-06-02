@@ -54,7 +54,7 @@ import {
   runPocketBaseRequest,
   withAuthenticatedUser,
 } from "@/lib/pocketbase";
-import type { BookRecord, FolderRecord } from "@/lib/types";
+import type { BookRecord, FolderRecord, ReadingProgressRecord } from "@/lib/types";
 
 type Selection =
   | { type: "folder"; id: string }
@@ -85,6 +85,17 @@ function collectNestedFolderIds(rootId: string, folders: FolderRecord[]) {
 
 function normalizeParent(value: string | null | undefined) {
   return value || null;
+}
+
+function formatSignalDate(value?: string) {
+  if (!value) {
+    return "No recent signal";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(value));
 }
 
 function isDuplicateFolderName(
@@ -207,22 +218,67 @@ function FolderTreeItem({
 
 function Sidebar({
   activeFolder,
+  books,
   folders,
   isOpen,
   onClose,
+  onOpenBook,
   onOpenAccountSettings,
   onSelectFolder,
   onSignOut,
+  readingProgress,
 }: {
   activeFolder: string | null;
+  books: BookRecord[];
   folders: FolderRecord[];
   isOpen: boolean;
   onClose: () => void;
+  onOpenBook: (bookId: string) => void;
   onOpenAccountSettings: () => void;
   onSelectFolder: (folderId: string | null) => void;
   onSignOut: () => void;
+  readingProgress: ReadingProgressRecord[];
 }) {
   const roots = folders.filter((folder) => !folder.parent);
+  const latestProgress = useMemo(() => {
+    const existingBookIds = new Set(books.map((book) => book.id));
+    return readingProgress
+      .filter((progress) => existingBookIds.has(progress.book))
+      .sort(
+        (left, right) =>
+          new Date(right.updated || right.created).getTime() -
+          new Date(left.updated || left.created).getTime(),
+      )[0];
+  }, [books, readingProgress]);
+  const latestProgressBook = latestProgress
+    ? books.find((book) => book.id === latestProgress.book)
+    : undefined;
+  const latestBook = useMemo(
+    () =>
+      [...books].sort(
+        (left, right) =>
+          new Date(right.updated || right.created).getTime() -
+          new Date(left.updated || left.created).getTime(),
+      )[0],
+    [books],
+  );
+  const pulseBook = latestProgressBook ?? latestBook;
+  const pulseTitle =
+    pulseBook?.title ??
+    (folders.length ? "Realms are waiting for a PDF" : "Awaiting first reading signal");
+  const pulseSignal = latestProgress
+    ? `Page ${latestProgress.last_page}`
+    : pulseBook
+      ? "Ready to begin"
+      : "No vessel yet";
+  const pulseDetail = latestProgress
+    ? `Last signal ${formatSignalDate(latestProgress.updated || latestProgress.created)}`
+    : pulseBook
+      ? `Latest vessel ${formatSignalDate(pulseBook.updated || pulseBook.created)}`
+      : "Upload a PDF to awaken memory flow.";
+  const libraryContext = `${books.length} ${
+    books.length === 1 ? "vessel" : "vessels"
+  } // ${folders.length} ${folders.length === 1 ? "realm" : "realms"}`;
 
   return (
     <>
@@ -295,21 +351,42 @@ function Sidebar({
               Account Settings
             </button>
           </div>
-          <div className="rounded-lg border border-slate-700/35 bg-slate-900/35 p-3.5">
-            <div className="flex items-center gap-2 text-cyan-300">
-              <Activity className="h-3.5 w-3.5" />
-              <span className="hud-label text-[0.5rem]">Sanctuary Coherence</span>
-            </div>
-            <div className="mt-3 flex items-end justify-between">
-              <div className="text-2xl font-semibold tracking-[-0.05em] text-white">
-                99.8
+          <div className="spatial-panel overflow-hidden rounded-lg border border-cyan-300/20 bg-cyan-400/[0.045] p-3.5 shadow-neon">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-cyan-300">
+                <Activity className="h-3.5 w-3.5" />
+                <span className="hud-label text-[0.5rem]">Reading Pulse</span>
               </div>
-              <div className="text-[0.62rem] font-semibold tracking-wider text-emerald-300">
-                CALM
-              </div>
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.7)]" />
             </div>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-800">
-              <div className="h-full w-[92%] rounded-full bg-gradient-to-r from-cyan-400 to-violet-400" />
+
+            <button
+              className="mt-3 block w-full rounded-md border border-transparent p-1.5 text-left transition hover:border-cyan-300/25 hover:bg-pearl/[0.04] disabled:cursor-default disabled:hover:border-transparent disabled:hover:bg-transparent"
+              disabled={!pulseBook}
+              onClick={() => pulseBook && onOpenBook(pulseBook.id)}
+              type="button"
+            >
+              <div className="line-clamp-2 text-sm font-semibold leading-5 text-white">
+                {pulseTitle}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="font-mono text-[0.62rem] font-semibold uppercase tracking-widest text-aureate">
+                  {pulseSignal}
+                </span>
+                <span className="text-[0.58rem] text-slate-500">
+                  {pulseDetail}
+                </span>
+              </div>
+            </button>
+
+            <div className="mt-3 flex items-center gap-1">
+              <span className="h-px flex-1 bg-gradient-to-r from-cyan-300/70 via-violet-300/45 to-transparent" />
+              <span className="h-1 w-1 rounded-full bg-aureate/80 shadow-halo" />
+              <span className="h-px flex-1 bg-gradient-to-r from-aureate/50 to-transparent" />
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-[0.6rem] uppercase tracking-wider text-slate-600">
+              <BookOpen className="h-3 w-3 text-cyan-300/60" />
+              <span>{libraryContext}</span>
             </div>
           </div>
           <button
@@ -951,6 +1028,7 @@ export function DashboardWorkspace() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [books, setBooks] = useState<BookRecord[]>([]);
+  const [readingProgress, setReadingProgress] = useState<ReadingProgressRecord[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [search, setSearch] = useState("");
@@ -983,7 +1061,7 @@ export function DashboardWorkspace() {
     try {
       const userId = await hydratePocketBaseAuth(pb);
       const filter = pb.filter("user = {:userId}", { userId });
-      const [folderRows, bookRows] = await Promise.all([
+      const [folderRows, bookRows, progressRows] = await Promise.all([
         runPocketBaseRequest("List authenticated folders", () =>
           pb.collection("folders").getFullList<FolderRecord>({
             filter,
@@ -996,9 +1074,16 @@ export function DashboardWorkspace() {
             sort: "-created",
           }),
         ),
+        runPocketBaseRequest("List authenticated reading pulse", () =>
+          pb.collection("reading_progress").getFullList<ReadingProgressRecord>({
+            filter,
+            sort: "-updated",
+          }),
+        ),
       ]);
       setFolders(folderRows);
       setBooks(bookRows);
+      setReadingProgress(progressRows);
       setTelemetryOnline(true);
     } catch (error) {
       logPocketBaseError("Hydrate dashboard library", error);
@@ -1451,12 +1536,15 @@ export function DashboardWorkspace() {
       <AmbientBackground compact />
       <Sidebar
         activeFolder={activeFolder}
+        books={books}
         folders={folders}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onOpenBook={(bookId) => router.push(`/reader/${bookId}`)}
         onOpenAccountSettings={() => setAccountSettingsOpen(true)}
         onSelectFolder={selectFolder}
         onSignOut={signOut}
+        readingProgress={readingProgress}
       />
 
       <div className="spatial-layer relative z-10 min-h-screen lg:pl-[282px]">
