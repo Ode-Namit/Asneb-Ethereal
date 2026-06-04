@@ -148,6 +148,48 @@ button {
   backdrop-filter: blur(30px) saturate(142%);
 }
 
+.asneb-sidebar-scroll {
+  scroll-behavior: smooth;
+  scrollbar-color: rgba(139, 233, 255, 0.24) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.asneb-sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.asneb-sidebar-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.025);
+}
+
+.asneb-sidebar-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid rgba(255, 250, 240, 0.08);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(139, 233, 255, 0.28),
+      rgba(246, 215, 138, 0.24)
+    );
+  box-shadow: 0 0 10px rgba(139, 233, 255, 0.14);
+}
+
+.asneb-sidebar-scroll:hover {
+  scrollbar-color: rgba(246, 215, 138, 0.45) transparent;
+}
+
+.asneb-sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(139, 233, 255, 0.48),
+      rgba(246, 215, 138, 0.42)
+    );
+  box-shadow: 0 0 14px rgba(246, 215, 138, 0.18);
+}
+
 .cinematic-reveal {
   animation: cinematic-reveal 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -254,6 +296,210 @@ button {
   display: block;
   max-width: 100%;
   height: auto !important;
+}
+
+.asneb-pdf-highlight {
+  --asneb-highlight-rgb: 34, 211, 238;
+  --asneb-highlight-fill: 0.28;
+  --asneb-highlight-border: 0.74;
+  z-index: 22;
+  border: 1px solid rgba(var(--asneb-highlight-rgb), var(--asneb-highlight-border));
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0) 38%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(var(--asneb-highlight-rgb), 0.34),
+      rgba(var(--asneb-highlight-rgb), var(--asneb-highlight-fill))
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(7, 7, 18, 0.1),
+    0 0 0 1px rgba(7, 7, 18, 0.14),
+    0 0 9px rgba(var(--asneb-highlight-rgb), 0.2);
+  opacity: 0.82;
+  outline: 1px solid rgba(255, 255, 255, 0.18);
+  outline-offset: -1px;
+  transition:
+    opacity 160ms ease,
+    filter 160ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.asneb-pdf-highlight::before {
+  position: absolute;
+  inset: -1px auto -1px -2px;
+  width: 3px;
+  border-radius: 999px;
+  background: rgb(var(--asneb-highlight-rgb));
+  box-shadow: 0 0 8px rgba(var(--asneb-highlight-rgb), 0.58);
+  content: "";
+  pointer-events: none;
+}
+
+.asneb-pdf-highlight[data-has-note="true"]::after {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(7, 7, 18, 0.72);
+  border-radius: 999px;
+  background: #fff4bc;
+  box-shadow:
+    0 0 0 1px rgba(255, 250, 240, 0.72),
+    0 0 12px rgba(246, 215, 138, 0.72);
+  content: "";
+  pointer-events: none;
+}
+
+.asneb-pdf-highlight:hover {
+  z-index: 26;
+  border-color: rgba(255, 255, 255, 0.72);
+  filter: saturate(112%) brightness(1.02);
+  opacity: 0.9;
+  transform: scaleY(1.025);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.32),
+    0 0 0 1px rgba(7, 7, 18, 0.22),
+    0 0 12px rgba(var(--asneb-highlight-rgb), 0.34);
+}
+
+.asneb-pdf-highlight-focused {
+  z-index: 28;
+  animation: asneb-highlight-focus 1.65s ease-in-out infinite;
+  border-color: rgba(255, 255, 255, 0.78);
+  opacity: 0.9;
+  transform: scaleY(1.025);
+}
+
+.asneb-highlight-cyan {
+  --asneb-highlight-rgb: 34, 211, 238;
+  --asneb-highlight-fill: 0.3;
+}
+
+.asneb-highlight-violet {
+  --asneb-highlight-rgb: 167, 139, 250;
+  --asneb-highlight-fill: 0.31;
+}
+
+.asneb-highlight-amber {
+  --asneb-highlight-rgb: 245, 158, 11;
+  --asneb-highlight-fill: 0.33;
+}
+
+.asneb-highlight-emerald {
+  --asneb-highlight-rgb: 16, 185, 129;
+  --asneb-highlight-fill: 0.3;
+}
+
+.asneb-highlight-rose {
+  --asneb-highlight-rgb: 244, 114, 182;
+  --asneb-highlight-fill: 0.31;
+}
+
+.asneb-selection-panel {
+  border-color: rgba(246, 215, 138, 0.18);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 250, 240, 0.075),
+      rgba(16, 19, 31, 0.34)
+    ),
+    radial-gradient(circle at 16% 0%, rgba(246, 215, 138, 0.06), transparent 38%),
+    rgba(7, 7, 18, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 48px rgba(0, 0, 0, 0.26),
+    0 0 28px rgba(246, 215, 138, 0.08);
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+.asneb-selection-panel button {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.asneb-selection-panel button:hover {
+  background: rgba(139, 233, 255, 0.075);
+  color: rgba(236, 254, 255, 0.98);
+}
+
+.asneb-selection-panel svg {
+  opacity: 0.92;
+}
+
+.asneb-selection-panel .hud-label {
+  color: rgba(246, 215, 138, 0.72);
+}
+
+.asneb-note-anchor {
+  border: 1px solid rgba(255, 244, 188, 0.92);
+  background:
+    radial-gradient(circle at 32% 24%, #fff8d7, #facc15 46%, #d97706);
+  box-shadow:
+    0 0 0 2px rgba(7, 7, 18, 0.52),
+    0 0 18px rgba(252, 211, 77, 0.8),
+    0 10px 24px rgba(7, 7, 18, 0.38);
+  transform: translate(2px, -35%);
+}
+
+.asneb-note-anchor::after {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(246, 215, 138, 0.38);
+  border-radius: inherit;
+  content: "";
+  opacity: 0.72;
+}
+
+.asneb-note-anchor:hover {
+  transform: translate(2px, -35%) scale(1.12);
+  box-shadow:
+    0 0 0 2px rgba(7, 7, 18, 0.62),
+    0 0 24px rgba(252, 211, 77, 0.94),
+    0 12px 26px rgba(7, 7, 18, 0.42);
+}
+
+@keyframes asneb-highlight-focus {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+      0 0 0 1px rgba(7, 7, 18, 0.26),
+      0 0 12px rgba(var(--asneb-highlight-rgb), 0.36);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.58),
+      0 0 0 2px rgba(255, 250, 240, 0.24),
+      0 0 20px rgba(var(--asneb-highlight-rgb), 0.58);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asneb-pdf-highlight,
+  .asneb-pdf-highlight:hover,
+  .asneb-pdf-highlight-focused,
+  .asneb-note-anchor,
+  .asneb-note-anchor:hover {
+    animation: none;
+    transition: none;
+  }
+
+  .asneb-pdf-highlight:hover,
+  .asneb-pdf-highlight-focused {
+    transform: none;
+  }
+
+  .asneb-note-anchor:hover {
+    transform: translate(2px, -35%);
+  }
 }
 
 .markdown-body p {

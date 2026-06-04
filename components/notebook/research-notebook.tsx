@@ -449,18 +449,28 @@ export function ResearchNotebook() {
                 const color = getHighlightColor(highlight.color);
                 return (
                   <motion.div
-                    className="glass-panel spatial-panel rounded-xl p-4"
+                    className={`glass-panel spatial-panel rounded-xl border-l-2 ${color.ring} ${color.soft} p-4`}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     key={highlight.id}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-2 font-mono text-[0.6rem] tracking-widest text-slate-500">
-                        <span className={`h-2 w-2 rounded-full ${color.solid}`} />
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${color.solid} shadow-[0_0_12px_rgba(255,255,255,0.18)]`}
+                        />
                         PAGE {highlight.page}
                       </span>
-                      <span className="text-[0.58rem] text-slate-600">
-                        {formatResearchDate(highlight.updated)}
+                      <span className="flex items-center gap-2">
+                        {highlight.note && (
+                          <span className="flex items-center gap-1 rounded-full border border-amber-300/25 bg-amber-300/[0.1] px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-wider text-amber-100/80">
+                            <MessageSquareText className="h-3 w-3" />
+                            Note
+                          </span>
+                        )}
+                        <span className="text-[0.58rem] text-slate-600">
+                          {formatResearchDate(highlight.updated)}
+                        </span>
                       </span>
                     </div>
                     <button
@@ -473,7 +483,7 @@ export function ResearchNotebook() {
                       <div className="hud-label text-[0.46rem] text-cyan-200/65">
                         {book?.title ?? "Reading PDF"}
                       </div>
-                      <p className="mt-2 line-clamp-5 text-xs leading-5 text-slate-300">
+                      <p className={`mt-2 line-clamp-5 text-xs leading-5 ${color.text}`}>
                         {highlight.selected_text}
                       </p>
                     </button>

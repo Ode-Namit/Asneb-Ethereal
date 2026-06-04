@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type MouseEvent,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -154,6 +155,54 @@ function isDuplicateBookTitle(
       book.title.trim().toLowerCase() === normalizedTitle &&
       normalizeParent(book.folder) === folder,
   );
+}
+
+function targetKey(target: LibraryTarget) {
+  return `${target.type}:${target.id}`;
+}
+
+function isSameTarget(first: LibraryTarget, second: LibraryTarget) {
+  return first.type === second.type && first.id === second.id;
+}
+
+function mergeLibraryTargets(targets: LibraryTarget[]) {
+  const seen = new Set<string>();
+  return targets.filter((target) => {
+    const key = targetKey(target);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function collectActionTargets(
+  targets: LibraryTarget[],
+  folders: FolderRecord[],
+  books: BookRecord[],
+) {
+  const selectedFolderIds = new Set(
+    targets.filter((target) => target.type === "folder").map((target) => target.id),
+  );
+  const childFolderIds = new Set<string>();
+
+  for (const folderId of selectedFolderIds) {
+    for (const nestedId of collectNestedFolderIds(folderId, folders)) {
+      if (nestedId !== folderId) {
+        childFolderIds.add(nestedId);
+      }
+    }
+  }
+
+  return mergeLibraryTargets(targets).filter((target) => {
+    if (target.type === "folder") {
+      return !childFolderIds.has(target.id);
+    }
+
+    const book = books.find((item) => item.id === target.id);
+    return !book?.folder || !childFolderIds.has(book.folder);
+  });
 }
 
 function FolderTreeItem({
@@ -324,7 +373,7 @@ function Sidebar({
         )}
       </AnimatePresence>
       <aside
-        className={`floating-glass fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col border-r border-pearl/10 px-4 py-5 shadow-2xl transition-transform duration-300 lg:translate-x-0 ${
+        className={`floating-glass fixed inset-y-0 left-0 z-40 flex w-[282px] flex-col overflow-hidden border-r border-pearl/10 px-4 py-5 shadow-2xl transition-transform duration-300 lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -340,7 +389,7 @@ function Sidebar({
           </button>
         </div>
 
-        <div className="mt-9">
+        <div className="mt-9 flex min-h-0 flex-1 flex-col">
           <div className="hud-label px-2">Realm Topology</div>
           <button
             className={`mt-3 flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition ${
@@ -354,7 +403,7 @@ function Sidebar({
             <Home className="h-3.5 w-3.5 text-cyan-300" />
             Root Sanctuary
           </button>
-          <div className="mt-1 space-y-0.5">
+          <div className="asneb-sidebar-scroll mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pr-1">
             {roots.map((folder) => (
               <FolderTreeItem
                 key={folder.id}
@@ -367,7 +416,7 @@ function Sidebar({
           </div>
         </div>
 
-        <div className="mt-auto space-y-3">
+        <div className="mt-4 shrink-0 space-y-3">
           <div className="rounded-lg border border-pearl/10 bg-pearl/[0.035] p-3.5">
             <div className="hud-label text-[0.5rem]">Account / Settings</div>
             <button
@@ -844,7 +893,7 @@ function MoveDialog({
   onClose,
   onMove,
   open,
-  target,
+  targets,
 }: {
   books: BookRecord[];
   folders: FolderRecord[];
@@ -852,35 +901,52 @@ function MoveDialog({
   onClose: () => void;
   onMove: (folderId: string | null) => Promise<void>;
   open: boolean;
-  target: LibraryTarget | null;
+  targets: LibraryTarget[];
 }) {
   const [targetFolder, setTargetFolder] = useState<string | null>(null);
   const roots = folders.filter((folder) => !folder.parent);
+  const firstTarget = targets[0] ?? null;
   const disabledIds = useMemo(
-    () =>
-      target?.type === "folder"
-        ? collectNestedFolderIds(target.id, folders)
-        : new Set<string>(),
-    [folders, target],
+    () => {
+      const blocked = new Set<string>();
+      for (const target of targets) {
+        if (target.type === "folder") {
+          for (const folderId of collectNestedFolderIds(target.id, folders)) {
+            blocked.add(folderId);
+          }
+        }
+      }
+      return blocked;
+    },
+    [folders, targets],
   );
   const name =
-    target?.type === "folder"
-      ? folders.find((folder) => folder.id === target.id)?.name ?? "Selected realm"
-      : books.find((book) => book.id === target?.id)?.title ?? "Selected PDF";
+    targets.length > 1
+      ? `${targets.length} selected memory objects`
+      : firstTarget?.type === "folder"
+        ? folders.find((folder) => folder.id === firstTarget.id)?.name ??
+          "Selected realm"
+        : books.find((book) => book.id === firstTarget?.id)?.title ?? "Selected PDF";
 
   useEffect(() => {
-    if (!open || !target) {
+    if (!open || !firstTarget) {
       setTargetFolder(null);
       return;
     }
-    if (target.type === "folder") {
+    if (targets.length > 1) {
+      setTargetFolder(null);
+      return;
+    }
+    if (firstTarget.type === "folder") {
       setTargetFolder(
-        normalizeParent(folders.find((folder) => folder.id === target.id)?.parent),
+        normalizeParent(folders.find((folder) => folder.id === firstTarget.id)?.parent),
       );
       return;
     }
-    setTargetFolder(normalizeParent(books.find((book) => book.id === target.id)?.folder));
-  }, [books, folders, open, target]);
+    setTargetFolder(
+      normalizeParent(books.find((book) => book.id === firstTarget.id)?.folder),
+    );
+  }, [books, firstTarget, folders, open, targets.length]);
 
   async function submitMove(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -889,7 +955,7 @@ function MoveDialog({
 
   return (
     <AnimatePresence>
-      {open && target && (
+      {open && firstTarget && (
         <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-5 backdrop-blur-sm"
           initial={{ opacity: 0 }}
@@ -1058,7 +1124,10 @@ export function DashboardWorkspace() {
   const [books, setBooks] = useState<BookRecord[]>([]);
   const [readingProgress, setReadingProgress] = useState<ReadingProgressRecord[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selections, setSelections] = useState<LibraryTarget[]>([]);
+  const [lastSelectedTarget, setLastSelectedTarget] = useState<LibraryTarget | null>(
+    null,
+  );
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -1163,6 +1232,17 @@ export function DashboardWorkspace() {
     [activeFolder, books, search, sortOrder],
   );
 
+  const currentItems = useMemo<LibraryTarget[]>(
+    () => [
+      ...currentFolders.map((folder) => ({ type: "folder" as const, id: folder.id })),
+      ...currentBooks.map((book) => ({ type: "book" as const, id: book.id })),
+    ],
+    [currentBooks, currentFolders],
+  );
+  const selectedCount = selections.length;
+  const hasSelection = selectedCount > 0;
+  const selection: Selection = selectedCount === 1 ? selections[0] : null;
+
   const breadcrumbs = useMemo(() => {
     const path: FolderRecord[] = [];
     let cursor = folders.find((folder) => folder.id === activeFolder);
@@ -1175,9 +1255,58 @@ export function DashboardWorkspace() {
     return path;
   }, [activeFolder, folders]);
 
+  function clearLibrarySelection() {
+    setSelections([]);
+    setLastSelectedTarget(null);
+  }
+
+  function isTargetSelected(target: LibraryTarget) {
+    return selections.some((selected) => isSameTarget(selected, target));
+  }
+
+  function selectLibraryItem(
+    event: MouseEvent<HTMLButtonElement>,
+    target: LibraryTarget,
+  ) {
+    event.stopPropagation();
+
+    if (event.shiftKey && lastSelectedTarget) {
+      const startIndex = currentItems.findIndex((item) =>
+        isSameTarget(item, lastSelectedTarget),
+      );
+      const endIndex = currentItems.findIndex((item) => isSameTarget(item, target));
+
+      if (startIndex >= 0 && endIndex >= 0) {
+        const start = Math.min(startIndex, endIndex);
+        const end = Math.max(startIndex, endIndex);
+        const range = currentItems.slice(start, end + 1);
+        setSelections((current) =>
+          event.ctrlKey || event.metaKey
+            ? mergeLibraryTargets([...current, ...range])
+            : range,
+        );
+        setLastSelectedTarget(target);
+        return;
+      }
+    }
+
+    if (event.ctrlKey || event.metaKey) {
+      setSelections((current) =>
+        current.some((selected) => isSameTarget(selected, target))
+          ? current.filter((selected) => !isSameTarget(selected, target))
+          : [...current, target],
+      );
+      setLastSelectedTarget(target);
+      return;
+    }
+
+    setSelections([target]);
+    setLastSelectedTarget(target);
+  }
+
   function selectFolder(folderId: string | null) {
     setActiveFolder(folderId);
-    setSelection(null);
+    clearLibrarySelection();
     setSidebarOpen(false);
   }
 
@@ -1329,64 +1458,83 @@ export function DashboardWorkspace() {
   }
 
   async function deleteSelection() {
-    if (!selection || deleting) {
+    if (!hasSelection || deleting) {
       return;
     }
 
     const pb = getPocketBase();
-    const target =
-      selection.type === "folder"
-        ? folders.find((folder) => folder.id === selection.id)
-        : books.find((book) => book.id === selection.id);
+    const actionTargets = collectActionTargets(selections, folders, books).filter(
+      (target) =>
+        target.type === "folder"
+          ? folders.some((folder) => folder.id === target.id)
+          : books.some((book) => book.id === target.id),
+    );
 
-    if (!target) {
+    if (!actionTargets.length) {
       return;
     }
 
     const previousFolders = folders;
     const previousBooks = books;
     const previousActiveFolder = activeFolder;
-    const nestedFolderIds =
-      selection.type === "folder"
-        ? collectNestedFolderIds(selection.id, folders)
-        : new Set<string>();
-    const removedBookIds = new Set(
-      selection.type === "book"
-        ? [selection.id]
-        : books
-            .filter((book) => book.folder && nestedFolderIds.has(book.folder))
-            .map((book) => book.id),
-    );
+    const previousSelections = selections;
+    const previousLastSelectedTarget = lastSelectedTarget;
+    const nestedFolderIds = new Set<string>();
+    const removedBookIds = new Set<string>();
+
+    for (const target of actionTargets) {
+      if (target.type === "folder") {
+        for (const folderId of collectNestedFolderIds(target.id, folders)) {
+          nestedFolderIds.add(folderId);
+        }
+      } else {
+        removedBookIds.add(target.id);
+      }
+    }
+
+    for (const book of books) {
+      if (book.folder && nestedFolderIds.has(book.folder)) {
+        removedBookIds.add(book.id);
+      }
+    }
 
     setDeleting(true);
     setFolders((current) => current.filter((folder) => !nestedFolderIds.has(folder.id)));
     setBooks((current) => current.filter((book) => !removedBookIds.has(book.id)));
-    setSelection(null);
+    clearLibrarySelection();
     if (activeFolder && nestedFolderIds.has(activeFolder)) {
       setActiveFolder(null);
     }
     try {
-      const response = await fetch("/api/library/delete", {
-        method: "POST",
-        headers: {
-          Authorization: pb.authStore.token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(selection),
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        summary?: { books?: number; folders?: number };
-      };
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Recursive deletion failed.");
+      let deletedBooks = 0;
+      let deletedFolders = 0;
+
+      for (const target of actionTargets) {
+        const response = await fetch("/api/library/delete", {
+          method: "POST",
+          headers: {
+            Authorization: pb.authStore.token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(target),
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          summary?: { books?: number; folders?: number };
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Recursive deletion failed.");
+        }
+        deletedBooks += payload.summary?.books ?? 0;
+        deletedFolders += payload.summary?.folders ?? 0;
       }
+
       setDeleteDialogOpen(false);
       showNotice(
-        `Memory object removed. ${payload.summary?.books ?? 0} PDF${
-          payload.summary?.books === 1 ? "" : "s"
-        } and ${payload.summary?.folders ?? 0} folder${
-          payload.summary?.folders === 1 ? "" : "s"
+        `${actionTargets.length === 1 ? "Memory object" : "Selected memory objects"} removed. ${deletedBooks} PDF${
+          deletedBooks === 1 ? "" : "s"
+        } and ${deletedFolders} folder${
+          deletedFolders === 1 ? "" : "s"
         } deleted.`,
         "success",
       );
@@ -1395,7 +1543,8 @@ export function DashboardWorkspace() {
       setFolders(previousFolders);
       setBooks(previousBooks);
       setActiveFolder(previousActiveFolder);
-      setSelection(selection);
+      setSelections(previousSelections);
+      setLastSelectedTarget(previousLastSelectedTarget);
       showNotice(
         error instanceof Error
           ? `The selected record could not be removed: ${error.message}`
@@ -1496,63 +1645,102 @@ export function DashboardWorkspace() {
     }
   }
 
-  async function moveLibraryTarget(target: LibraryTarget, targetFolder: string | null) {
+  async function moveLibraryTargets(targets: LibraryTarget[], targetFolder: string | null) {
     if (moving) {
       return;
     }
 
+    const actionTargets = collectActionTargets(targets, folders, books).filter((target) =>
+      target.type === "folder"
+        ? folders.some((folder) => folder.id === target.id)
+        : books.some((book) => book.id === target.id),
+    );
+    if (!actionTargets.length) {
+      return;
+    }
+
     const folderTarget = targetFolder || null;
-    if (target.type === "folder") {
-      const folder = folders.find((item) => item.id === target.id);
-      if (!folder) {
-        return;
-      }
-      const blocked = collectNestedFolderIds(target.id, folders);
-      if (folderTarget && blocked.has(folderTarget)) {
-        showNotice("A realm cannot be moved inside itself or its descendants.", "error");
-        return;
-      }
-      if (isDuplicateFolderName(folders, folder.name, folderTarget, folder.id)) {
-        showNotice("A realm with that name already exists at the destination.", "error");
-        return;
-      }
-    } else {
-      const book = books.find((item) => item.id === target.id);
-      if (!book) {
-        return;
-      }
-      if (isDuplicateBookTitle(books, book.title, folderTarget, book.id)) {
-        showNotice("A PDF with that title already exists at the destination.", "error");
-        return;
+    const selectedFolderNames = new Set<string>();
+    const selectedBookTitles = new Set<string>();
+
+    for (const target of actionTargets) {
+      if (target.type === "folder") {
+        const folder = folders.find((item) => item.id === target.id);
+        if (!folder) {
+          return;
+        }
+        const folderNameKey = folder.name.trim().toLowerCase();
+        if (selectedFolderNames.has(folderNameKey)) {
+          showNotice("Selected realms include duplicate names for this destination.", "error");
+          return;
+        }
+        selectedFolderNames.add(folderNameKey);
+        const blocked = collectNestedFolderIds(target.id, folders);
+        if (folderTarget && blocked.has(folderTarget)) {
+          showNotice("A realm cannot be moved inside itself or its descendants.", "error");
+          return;
+        }
+        if (isDuplicateFolderName(folders, folder.name, folderTarget, folder.id)) {
+          showNotice("A realm with that name already exists at the destination.", "error");
+          return;
+        }
+      } else {
+        const book = books.find((item) => item.id === target.id);
+        if (!book) {
+          return;
+        }
+        const bookTitleKey = book.title.trim().toLowerCase();
+        if (selectedBookTitles.has(bookTitleKey)) {
+          showNotice("Selected PDFs include duplicate titles for this destination.", "error");
+          return;
+        }
+        selectedBookTitles.add(bookTitleKey);
+        if (isDuplicateBookTitle(books, book.title, folderTarget, book.id)) {
+          showNotice("A PDF with that title already exists at the destination.", "error");
+          return;
+        }
       }
     }
 
     const previousFolders = folders;
     const previousBooks = books;
+    const folderTargetIds = new Set(
+      actionTargets
+        .filter((target) => target.type === "folder")
+        .map((target) => target.id),
+    );
+    const bookTargetIds = new Set(
+      actionTargets.filter((target) => target.type === "book").map((target) => target.id),
+    );
+
     setMoving(true);
-    if (target.type === "folder") {
-      setFolders((current) =>
-        current.map((folder) =>
-          folder.id === target.id ? { ...folder, parent: folderTarget ?? "" } : folder,
-        ),
-      );
-    } else {
-      setBooks((current) =>
-        current.map((book) =>
-          book.id === target.id ? { ...book, folder: folderTarget ?? "" } : book,
-        ),
-      );
-    }
+    setFolders((current) =>
+      current.map((folder) =>
+        folderTargetIds.has(folder.id) ? { ...folder, parent: folderTarget ?? "" } : folder,
+      ),
+    );
+    setBooks((current) =>
+      current.map((book) =>
+        bookTargetIds.has(book.id) ? { ...book, folder: folderTarget ?? "" } : book,
+      ),
+    );
 
     try {
       const pb = getPocketBase();
-      await runPocketBaseRequest("Move library object", () =>
-        target.type === "folder"
-          ? pb.collection("folders").update(target.id, { parent: folderTarget })
-          : pb.collection("books").update(target.id, { folder: folderTarget }),
-      );
+      for (const target of actionTargets) {
+        await runPocketBaseRequest("Move library object", () =>
+          target.type === "folder"
+            ? pb.collection("folders").update(target.id, { parent: folderTarget })
+            : pb.collection("books").update(target.id, { folder: folderTarget }),
+        );
+      }
       setMoveDialogOpen(false);
-      showNotice("Moved into the selected realm.", "success");
+      showNotice(
+        actionTargets.length === 1
+          ? "Moved into the selected realm."
+          : `${actionTargets.length} selected objects moved into the chosen realm.`,
+        "success",
+      );
     } catch (error) {
       logPocketBaseError("Move library object workflow", error);
       setFolders(previousFolders);
@@ -1565,26 +1753,37 @@ export function DashboardWorkspace() {
   }
 
   async function moveSelection(targetFolder: string | null) {
-    if (!selection) {
+    if (!hasSelection) {
       return;
     }
-    await moveLibraryTarget(selection, targetFolder);
+    await moveLibraryTargets(selections, targetFolder);
   }
 
   function startDrag(event: DragEvent<HTMLButtonElement>, target: LibraryTarget) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("application/x-asneb-library-object", JSON.stringify(target));
+    if (!isTargetSelected(target)) {
+      setSelections([target]);
+      setLastSelectedTarget(target);
+    }
     setDraggedItem(target);
+  }
+
+  function getDraggedTargets(target: LibraryTarget) {
+    return isTargetSelected(target) ? selections : [target];
   }
 
   function allowFolderDrop(event: DragEvent<HTMLButtonElement>, folderId: string) {
     if (!draggedItem) {
       return;
     }
-    if (
-      draggedItem.type === "folder" &&
-      collectNestedFolderIds(draggedItem.id, folders).has(folderId)
-    ) {
+    const dragTargets = getDraggedTargets(draggedItem);
+    const blocked = dragTargets.some(
+      (target) =>
+        target.type === "folder" &&
+        collectNestedFolderIds(target.id, folders).has(folderId),
+    );
+    if (blocked) {
       return;
     }
     event.preventDefault();
@@ -1596,7 +1795,7 @@ export function DashboardWorkspace() {
     if (!draggedItem) {
       return;
     }
-    await moveLibraryTarget(draggedItem, folderId);
+    await moveLibraryTargets(getDraggedTargets(draggedItem), folderId);
   }
 
   function signOut() {
@@ -1765,7 +1964,7 @@ export function DashboardWorkspace() {
                 New Realm
               </Button>
               <Button
-                disabled={!selection || moving}
+                disabled={!hasSelection || moving}
                 onClick={() => setMoveDialogOpen(true)}
                 variant="ghost"
               >
@@ -1777,7 +1976,7 @@ export function DashboardWorkspace() {
                 Move To
               </Button>
               <Button
-                disabled={!selection || renaming}
+                disabled={selectedCount !== 1 || renaming}
                 onClick={() => setRenameDialogOpen(true)}
                 variant="ghost"
               >
@@ -1815,7 +2014,7 @@ export function DashboardWorkspace() {
                 </Button>
               </div>
               <Button
-                disabled={!selection || deleting}
+                disabled={!hasSelection || deleting}
                 onClick={() => setDeleteDialogOpen(true)}
                 variant="danger"
               >
@@ -1898,10 +2097,22 @@ export function DashboardWorkspace() {
             </button>
           )}
 
-          <section className="mt-8">
+          <section
+            className="mt-8"
+            onClick={(event) => {
+              if (event.currentTarget === event.target) {
+                clearLibrarySelection();
+              }
+            }}
+          >
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <div className="hud-label">Current Realm</div>
               <div className="h-px flex-1 bg-gradient-to-r from-slate-700/60 to-transparent" />
+              {selectedCount > 1 && (
+                <div className="rounded-full border border-cyan-300/20 bg-cyan-400/[0.07] px-3 py-1 font-mono text-[0.58rem] uppercase tracking-[0.22em] text-cyan-100/85">
+                  {selectedCount} selected
+                </div>
+              )}
               <div className="font-mono text-[0.62rem] tracking-widest text-slate-600">
                 {currentFolders.length + currentBooks.length} OBJECTS
               </div>
@@ -1928,21 +2139,33 @@ export function DashboardWorkspace() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div
+                className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                onClick={(event) => {
+                  if (event.currentTarget === event.target) {
+                    clearLibrarySelection();
+                  }
+                }}
+              >
                 {currentFolders.map((folder, index) => (
                   <motion.button
                     key={folder.id}
                     draggable
                     className={`glass-panel spatial-panel group relative min-h-[152px] overflow-hidden rounded-xl p-4 text-left transition duration-300 hover:border-cyan-300/50 hover:shadow-neon ${
-                      selection?.type === "folder" && selection.id === folder.id
-                        ? "border-cyan-300/70 bg-cyan-400/[0.09]"
+                      isTargetSelected({ type: "folder", id: folder.id })
+                        ? "border-cyan-300/70 bg-cyan-400/[0.09] ring-1 ring-cyan-200/30"
                         : ""
                     }`}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.035 }}
-                    onClick={() => setSelection({ type: "folder", id: folder.id })}
-                    onDoubleClick={() => selectFolder(folder.id)}
+                    onClick={(event) =>
+                      selectLibraryItem(event, { type: "folder", id: folder.id })
+                    }
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      selectFolder(folder.id);
+                    }}
                     onDragEnd={() => setDraggedItem(null)}
                     onDragOver={(event) => allowFolderDrop(event, folder.id)}
                     onDragStartCapture={(event) =>
@@ -1970,8 +2193,8 @@ export function DashboardWorkspace() {
                     key={book.id}
                     draggable
                     className={`glass-panel spatial-panel group relative min-h-[152px] overflow-hidden rounded-xl p-4 text-left transition duration-300 hover:border-violet-300/50 hover:shadow-violet ${
-                      selection?.type === "book" && selection.id === book.id
-                        ? "border-violet-300/70 bg-violet-400/[0.09]"
+                      isTargetSelected({ type: "book", id: book.id })
+                        ? "border-violet-300/70 bg-violet-400/[0.09] ring-1 ring-violet-200/30"
                         : ""
                     }`}
                     initial={{ opacity: 0, y: 12 }}
@@ -1979,8 +2202,13 @@ export function DashboardWorkspace() {
                     transition={{
                       delay: (index + currentFolders.length) * 0.035,
                     }}
-                    onClick={() => setSelection({ type: "book", id: book.id })}
-                    onDoubleClick={() => router.push(`/reader/${book.id}`)}
+                    onClick={(event) =>
+                      selectLibraryItem(event, { type: "book", id: book.id })
+                    }
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      router.push(`/reader/${book.id}`);
+                    }}
                     onDragEnd={() => setDraggedItem(null)}
                     onDragStartCapture={(event) =>
                       startDrag(event, { type: "book", id: book.id })
@@ -2035,8 +2263,8 @@ export function DashboardWorkspace() {
         moving={moving}
         onClose={() => setMoveDialogOpen(false)}
         onMove={moveSelection}
-        open={moveDialogOpen && Boolean(selection)}
-        target={selection}
+        open={moveDialogOpen && hasSelection}
+        targets={selections}
       />
       <RenameDialog
         currentName={getSelectedName()}
@@ -2049,19 +2277,23 @@ export function DashboardWorkspace() {
       <DeleteConfirmationDialog
         deleting={deleting}
         description={
-          selection?.type === "folder"
+          selectedCount > 1
+            ? "This removes every selected realm/PDF, including nested realms, PDFs, and all linked memory fragments, bookmarks, notes, companion reflections, progress coordinates, and indexed pages."
+            : selection?.type === "folder"
             ? "This removes the selected realm, every nested realm, each PDF inside it, and all linked memory fragments, bookmarks, notes, companion reflections, progress coordinates, and indexed pages."
             : "This removes the PDF from PocketBase storage and clears its linked memory fragments, bookmarks, notes, companion reflections, progress coordinates, and indexed pages."
         }
         name={
-          selection?.type === "folder"
+          selectedCount > 1
+            ? `${selectedCount} selected objects`
+            : selection?.type === "folder"
             ? folders.find((folder) => folder.id === selection.id)?.name ??
               "Selected realm"
             : books.find((book) => book.id === selection?.id)?.title ?? "Selected PDF"
         }
         onCancel={() => setDeleteDialogOpen(false)}
         onConfirm={() => void deleteSelection()}
-        open={deleteDialogOpen && Boolean(selection)}
+        open={deleteDialogOpen && hasSelection}
       />
     </main>
   );

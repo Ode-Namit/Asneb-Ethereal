@@ -530,6 +530,8 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
   const [pdfError, setPdfError] = useState("");
   const [progressReady, setProgressReady] = useState(false);
   const [floatingMenu, setFloatingMenu] = useState<FloatingMenu | null>(null);
+  const [preferredHighlightColor, setPreferredHighlightColor] =
+    useState<HighlightColor>("cyan");
   const [panelOpen, setPanelOpen] = useState(false);
   const [aiMode, setAiMode] = useState<PromptMode | null>(null);
   const [aiText, setAiText] = useState("");
@@ -1337,7 +1339,7 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
       <AnimatePresence>
         {floatingMenu && (
           <motion.div
-            className="floating-glass fixed z-[70] max-w-[calc(100vw-16px)] rounded-lg border border-aureate/25 p-1.5 shadow-[0_0_42px_rgba(246,215,138,0.14)]"
+            className="floating-glass asneb-selection-panel fixed z-[70] max-w-[calc(100vw-16px)] rounded-lg border border-aureate/25 p-1.5 shadow-[0_0_42px_rgba(246,215,138,0.14)]"
             initial={{ opacity: 0, scale: 0.94, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 4 }}
@@ -1395,25 +1397,38 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
             </div>
             <div className="mt-1 flex items-center gap-1 border-t border-slate-700/45 pt-1">
               <span className="hud-label mr-1 px-1 text-[0.44rem]">Highlight</span>
-              {highlightColors.map(({ color, label, solid }) => (
-                <button
-                  aria-label={`Highlight ${label}`}
-                  className={`h-5 w-5 rounded-md border border-white/25 transition hover:scale-110 ${solid}`}
-                  key={color}
-                  onClick={() => {
-                    void research.addHighlight({
-                      anchor: floatingMenu.anchor,
-                      color: color as HighlightColor,
-                      page: floatingMenu.page,
-                      selectedText: floatingMenu.text,
-                    });
-                    setFloatingMenu(null);
-                    window.getSelection()?.removeAllRanges();
-                  }}
-                  title={label}
-                  type="button"
-                />
-              ))}
+              {highlightColors.map(({ color, label, ring, solid }) => {
+                const selected = preferredHighlightColor === color;
+                return (
+                  <button
+                    aria-label={`Highlight ${label}`}
+                    aria-pressed={selected}
+                    className={`relative h-6 w-6 rounded-md border transition duration-200 hover:scale-110 hover:shadow-halo ${solid} ${
+                      selected
+                        ? `${ring} scale-110 ring-2 ring-pearl/70 ring-offset-2 ring-offset-slate-950`
+                        : "border-white/30 shadow-[0_0_12px_rgba(255,255,255,0.08)]"
+                    }`}
+                    key={color}
+                    onClick={() => {
+                      setPreferredHighlightColor(color);
+                      void research.addHighlight({
+                        anchor: floatingMenu.anchor,
+                        color,
+                        page: floatingMenu.page,
+                        selectedText: floatingMenu.text,
+                      });
+                      setFloatingMenu(null);
+                      window.getSelection()?.removeAllRanges();
+                    }}
+                    title={selected ? `${label} selected` : label}
+                    type="button"
+                  >
+                    {selected && (
+                      <span className="absolute inset-1 rounded-[3px] border border-slate-950/55" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
         )}

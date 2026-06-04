@@ -186,7 +186,9 @@ function HighlightCard({
   const color = getHighlightColor(highlight.color);
 
   return (
-    <div className="spatial-panel rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3">
+    <div
+      className={`spatial-panel rounded-lg border border-l-2 ${color.ring} ${color.soft} p-3`}
+    >
       <button
         className="w-full text-left"
         onClick={() => onNavigate(highlight.page, highlight.id)}
@@ -194,19 +196,29 @@ function HighlightCard({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 font-mono text-[0.61rem] tracking-widest text-slate-500">
-            <span className={`h-2 w-2 rounded-full ${color.solid}`} />
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${color.solid} shadow-[0_0_12px_rgba(255,255,255,0.18)]`}
+            />
             PAGE {highlight.page}
           </span>
-          <span className="text-[0.6rem] text-slate-600">
-            {formatResearchDate(highlight.updated)}
+          <span className="flex items-center gap-2">
+            {highlight.note.trim() && (
+              <span className="flex items-center gap-1 rounded-full border border-amber-300/25 bg-amber-300/[0.1] px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-wider text-amber-100/80">
+                <MessageSquareText className="h-3 w-3" />
+                Note
+              </span>
+            )}
+            <span className="text-[0.6rem] text-slate-600">
+              {formatResearchDate(highlight.updated)}
+            </span>
           </span>
         </div>
-        <p className="mt-2 line-clamp-4 text-xs leading-5 text-slate-300">
+        <p className={`mt-2 line-clamp-4 text-xs leading-5 ${color.text}`}>
           {highlight.selected_text}
         </p>
       </button>
       <textarea
-        className="mt-3 min-h-16 w-full resize-y rounded-md border border-slate-700/35 bg-slate-950/50 px-2.5 py-2 text-[0.7rem] leading-5 text-slate-300 outline-none transition placeholder:text-slate-700 focus:border-cyan-300/45"
+        className="mt-3 min-h-16 w-full resize-y rounded-md border border-slate-700/45 bg-slate-950/62 px-2.5 py-2 text-[0.7rem] leading-5 text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-aureate/55 focus:shadow-halo"
         onChange={(event) => onUpdateNote(highlight.id, event.target.value)}
         placeholder="Attach a note to this evidence..."
         value={highlight.note}

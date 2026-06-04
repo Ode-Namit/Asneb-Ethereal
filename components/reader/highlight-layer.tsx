@@ -21,15 +21,17 @@ export function HighlightLayer({
       {highlights.flatMap((highlight) => {
         const anchor = parsePdfAnchor(highlight.anchor_json);
         const color = getHighlightColor(highlight.color);
+        const hasNote = Boolean(highlight.note.trim());
 
         return (anchor?.rects ?? []).map((rect, index) => (
           <motion.button
             aria-label={`Open highlight: ${highlight.selected_text}`}
-            className={`pointer-events-auto absolute rounded-[2px] border transition hover:brightness-125 ${color.overlay} ${
+            className={`asneb-pdf-highlight pointer-events-auto absolute ${color.overlay} ${
               focusedHighlightId === highlight.id
-                ? "animate-pulse-glow shadow-[0_0_22px_rgba(0,212,255,0.62)]"
+                ? "asneb-pdf-highlight-focused"
                 : ""
             }`}
+            data-has-note={hasNote}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             key={`${highlight.id}-${index}`}
@@ -53,7 +55,7 @@ export function HighlightLayer({
         return (
           <button
             aria-label={`Open ${note.kind} note`}
-            className="pointer-events-auto absolute z-30 flex h-5 w-5 items-center justify-center rounded-full border border-amber-100/60 bg-amber-300 text-slate-950 shadow-[0_0_16px_rgba(252,211,77,0.55)] transition hover:scale-110"
+            className="asneb-note-anchor pointer-events-auto absolute z-30 flex h-6 w-6 items-center justify-center rounded-full text-slate-950 transition"
             key={note.id}
             style={{
               left: `${Math.min(0.98, rect.left + rect.width) * 100}%`,
