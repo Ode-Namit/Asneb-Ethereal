@@ -45,6 +45,7 @@ import { useRouter } from "next/navigation";
 import { AmbientBackground } from "@/components/ui/ambient-background";
 import { Brand } from "@/components/ui/brand";
 import { Button } from "@/components/ui/button";
+import { SortSelect } from "@/components/ui/sort-select";
 import {
   appendAuthenticatedUser,
   getAuthenticatedUserId,
@@ -54,6 +55,11 @@ import {
   runPocketBaseRequest,
   withAuthenticatedUser,
 } from "@/lib/pocketbase";
+import {
+  getPocketBaseSort,
+  sortByOption,
+  type SortOption,
+} from "@/lib/sorting";
 import type { BookRecord, FolderRecord, ReadingProgressRecord } from "@/lib/types";
 
 type Selection =
@@ -67,6 +73,8 @@ type Notice = {
 };
 
 type LibraryTarget = Exclude<Selection, null>;
+
+const PDF_UPLOAD_MAX_BYTES = 262144000;
 
 function collectNestedFolderIds(rootId: string, folders: FolderRecord[]) {
   const ids = new Set([rootId]);
@@ -85,6 +93,26 @@ function collectNestedFolderIds(rootId: string, folders: FolderRecord[]) {
 
 function normalizeParent(value: string | null | undefined) {
   return value || null;
+}
+
+function formatUploadSize(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPdfUpload(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function getUniqueUploadFiles(files: File[]) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 function formatSignalDate(value?: string) {
@@ -1034,6 +1062,9 @@ export function DashboardWorkspace() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadDropActive, setUploadDropActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
+  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -1065,13 +1096,13 @@ export function DashboardWorkspace() {
         runPocketBaseRequest("List authenticated folders", () =>
           pb.collection("folders").getFullList<FolderRecord>({
             filter,
-            sort: "name",
+            sort: getPocketBaseSort(sortOrder, "name"),
           }),
         ),
         runPocketBaseRequest("List authenticated books", () =>
           pb.collection("books").getFullList<BookRecord>({
             filter,
-            sort: "-created",
+            sort: getPocketBaseSort(sortOrder, "title"),
           }),
         ),
         runPocketBaseRequest("List authenticated reading pulse", () =>
@@ -1098,7 +1129,7 @@ export function DashboardWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, sortOrder]);
 
   useEffect(() => {
     void loadLibrary();
@@ -1106,22 +1137,30 @@ export function DashboardWorkspace() {
 
   const currentFolders = useMemo(
     () =>
-      folders.filter(
-        (folder) =>
-          (folder.parent || null) === activeFolder &&
-          folder.name.toLowerCase().includes(search.toLowerCase()),
+      sortByOption(
+        folders.filter(
+          (folder) =>
+            (folder.parent || null) === activeFolder &&
+            folder.name.toLowerCase().includes(search.toLowerCase()),
+        ),
+        sortOrder,
+        (folder) => folder.name,
       ),
-    [activeFolder, folders, search],
+    [activeFolder, folders, search, sortOrder],
   );
 
   const currentBooks = useMemo(
     () =>
-      books.filter(
-        (book) =>
-          (book.folder || null) === activeFolder &&
-          book.title.toLowerCase().includes(search.toLowerCase()),
+      sortByOption(
+        books.filter(
+          (book) =>
+            (book.folder || null) === activeFolder &&
+            book.title.toLowerCase().includes(search.toLowerCase()),
+        ),
+        sortOrder,
+        (book) => book.title,
       ),
-    [activeFolder, books, search],
+    [activeFolder, books, search, sortOrder],
   );
 
   const breadcrumbs = useMemo(() => {
@@ -1162,42 +1201,131 @@ export function DashboardWorkspace() {
     }
   }
 
-  async function uploadPdf(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  async function uploadFiles(files: File[]) {
+    if (uploading) {
+      showNotice("An upload is already in motion.", "info");
+      return;
+    }
+
+    const selectedFiles = getUniqueUploadFiles(files);
+    const duplicateCount = files.length - selectedFiles.length;
+    if (!selectedFiles.length) {
+      return;
+    }
+
+    const invalidFiles = selectedFiles.filter((file) => !isPdfUpload(file));
+    const oversizedFiles = selectedFiles.filter(
+      (file) => file.size > PDF_UPLOAD_MAX_BYTES,
+    );
+    const uploadableFiles = selectedFiles.filter(
+      (file) => isPdfUpload(file) && file.size <= PDF_UPLOAD_MAX_BYTES,
+    );
+    const skippedMessages = [
+      ...(duplicateCount
+        ? [`${duplicateCount} duplicate selection${duplicateCount === 1 ? "" : "s"} skipped.`]
+        : []),
+      ...(invalidFiles.length
+        ? [
+            `${invalidFiles.length} non-PDF file${
+              invalidFiles.length === 1 ? "" : "s"
+            } skipped.`,
+          ]
+        : []),
+      ...(oversizedFiles.length
+        ? [
+            `${oversizedFiles.length} oversized PDF${
+              oversizedFiles.length === 1 ? "" : "s"
+            } skipped. Limit: ${formatUploadSize(PDF_UPLOAD_MAX_BYTES)}.`,
+          ]
+        : []),
+    ];
+
+    if (!uploadableFiles.length) {
+      if (skippedMessages.length) {
+        showNotice(skippedMessages.join(" "), "error");
+      }
+      return;
+    }
+
     const pb = getPocketBase();
-
-    if (!file) {
-      return;
-    }
-
-    if (file.type !== "application/pdf") {
-      showNotice("Only PDF documents can enter the library.", "error");
-      event.target.value = "";
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("title", file.name.replace(/\.pdf$/i, ""));
-    formData.append("file", file);
-    if (activeFolder) {
-      formData.append("folder", activeFolder);
-    }
+    let uploadedCount = 0;
+    const failedNames: string[] = [];
 
     setUploading(true);
+    setUploadProgress({ completed: 0, total: uploadableFiles.length });
     try {
-      appendAuthenticatedUser(pb, formData);
-      await runPocketBaseRequest("Upload authenticated PDF", () =>
-        pb.collection("books").create<BookRecord>(formData),
+      for (const file of uploadableFiles) {
+        const formData = new FormData();
+        formData.append("title", file.name.replace(/\.pdf$/i, ""));
+        formData.append("file", file);
+        if (activeFolder) {
+          formData.append("folder", activeFolder);
+        }
+
+        try {
+          appendAuthenticatedUser(pb, formData);
+          await runPocketBaseRequest("Upload authenticated PDF", () =>
+            pb.collection("books").create<BookRecord>(formData),
+          );
+          uploadedCount += 1;
+        } catch (error) {
+          failedNames.push(file.name);
+          logPocketBaseError(`Upload PDF workflow: ${file.name}`, error);
+        } finally {
+          setUploadProgress((current) => ({
+            ...current,
+            completed: current.completed + 1,
+          }));
+        }
+      }
+
+      if (uploadedCount > 0) {
+        await loadLibrary();
+      }
+
+      if (failedNames.length) {
+        showNotice(
+          `Uploaded ${uploadedCount} of ${uploadableFiles.length} PDF${
+            uploadableFiles.length === 1 ? "" : "s"
+          }. ${failedNames.length} failed.${
+            skippedMessages.length ? ` ${skippedMessages.join(" ")}` : ""
+          }`,
+          "error",
+        );
+        return;
+      }
+
+      showNotice(
+        `${uploadedCount} PDF${
+          uploadedCount === 1 ? "" : "s"
+        } settled into the sanctuary.${
+          skippedMessages.length ? ` ${skippedMessages.join(" ")}` : ""
+        }`,
+        "success",
       );
-      showNotice("PDF settled into the sanctuary.", "success");
-      await loadLibrary();
-    } catch (error) {
-      logPocketBaseError("Upload PDF workflow", error);
-      showNotice("The PDF upload failed.", "error");
     } finally {
       setUploading(false);
-      event.target.value = "";
+      setUploadProgress({ completed: 0, total: 0 });
     }
+  }
+
+  async function uploadPdf(event: ChangeEvent<HTMLInputElement>) {
+    await uploadFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  }
+
+  function allowUploadDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = uploading ? "none" : "copy";
+    if (!uploading) {
+      setUploadDropActive(true);
+    }
+  }
+
+  async function dropUploadFiles(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setUploadDropActive(false);
+    await uploadFiles(Array.from(event.dataTransfer.files ?? []));
   }
 
   async function deleteSelection() {
@@ -1660,13 +1788,32 @@ export function DashboardWorkspace() {
                 )}
                 Rename
               </Button>
-              <Button
-                disabled={uploading}
-                onClick={() => uploadRef.current?.click()}
+              <div
+                className={`rounded-lg transition ${
+                  uploadDropActive
+                    ? "shadow-neon ring-1 ring-cyan-300/40"
+                    : ""
+                }`}
+                onDragEnter={allowUploadDrop}
+                onDragLeave={() => setUploadDropActive(false)}
+                onDragOver={allowUploadDrop}
+                onDrop={(event) => void dropUploadFiles(event)}
               >
-                <Upload className="h-3.5 w-3.5" />
-                {uploading ? "Drifting in..." : "Upload PDF"}
-              </Button>
+                <Button
+                  className={uploadDropActive ? "border-cyan-300/60" : ""}
+                  disabled={uploading}
+                  onClick={() => uploadRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploading
+                    ? uploadProgress.total
+                      ? `Uploading ${uploadProgress.completed}/${uploadProgress.total}`
+                      : "Uploading..."
+                    : uploadDropActive
+                      ? "Drop PDFs"
+                      : "Upload PDFs"}
+                </Button>
+              </div>
               <Button
                 disabled={!selection || deleting}
                 onClick={() => setDeleteDialogOpen(true)}
@@ -1684,6 +1831,7 @@ export function DashboardWorkspace() {
                 accept="application/pdf"
                 className="hidden"
                 onChange={(event) => void uploadPdf(event)}
+                multiple
                 type="file"
               />
             </div>
@@ -1751,12 +1899,17 @@ export function DashboardWorkspace() {
           )}
 
           <section className="mt-8">
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
               <div className="hud-label">Current Realm</div>
               <div className="h-px flex-1 bg-gradient-to-r from-slate-700/60 to-transparent" />
               <div className="font-mono text-[0.62rem] tracking-widest text-slate-600">
                 {currentFolders.length + currentBooks.length} OBJECTS
               </div>
+              <SortSelect
+                label="Sort current realm"
+                onChange={setSortOrder}
+                value={sortOrder}
+              />
             </div>
 
             {loading ? (

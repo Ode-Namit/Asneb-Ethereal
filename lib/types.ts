@@ -8,7 +8,7 @@ export type FolderRecord = RecordModel & {
 
 export type BookRecord = RecordModel & {
   title: string;
-  file: string;
+  file: string | string[];
   folder: string;
   user: string;
 };

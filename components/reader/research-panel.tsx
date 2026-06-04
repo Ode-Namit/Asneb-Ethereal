@@ -25,8 +25,14 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SortSelect } from "@/components/ui/sort-select";
 import { getAuthenticatedUserId, getPocketBase, logPocketBaseError } from "@/lib/pocketbase";
 import { formatResearchDate, getHighlightColor, highlightColors } from "@/lib/research";
+import {
+  getPocketBaseSort,
+  sortByOption,
+  type SortOption,
+} from "@/lib/sorting";
 import type {
   AiAnalysisRecord,
   BookmarkRecord,
@@ -332,6 +338,7 @@ export function ResearchPanel({
   const [scope, setScope] = useState<"book" | "global">("book");
   const [color, setColor] = useState<HighlightColor | "all">("all");
   const [date, setDate] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
   const [stickyDraft, setStickyDraft] = useState("");
   const [globalPageMatches, setGlobalPageMatches] = useState<DocumentPageRecord[]>(
     [],
@@ -361,7 +368,7 @@ export function ResearchPanel({
               userId,
               query: query.trim(),
             }),
-            sort: "-updated",
+            sort: getPocketBaseSort(sortOrder, "content"),
           },
         );
         setGlobalPageMatches(result.items);
@@ -373,47 +380,103 @@ export function ResearchPanel({
     }, 280);
 
     return () => window.clearTimeout(timeout);
-  }, [query, scope, tool]);
+  }, [query, scope, sortOrder, tool]);
 
   const visibleHighlights = useMemo(() => {
     const source = scope === "book" ? currentHighlights : highlights;
-    return source.filter((highlight) => {
-      const matchesQuery =
-        !query ||
-        `${highlight.selected_text} ${highlight.note}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-      const matchesColor = color === "all" || highlight.color === color;
-      const matchesDate = !date || highlight.created.slice(0, 10) >= date;
-      return matchesQuery && matchesColor && matchesDate;
-    });
-  }, [color, currentHighlights, date, highlights, query, scope]);
+    return sortByOption(
+      source.filter((highlight) => {
+        const matchesQuery =
+          !query ||
+          `${highlight.selected_text} ${highlight.note}`
+            .toLowerCase()
+            .includes(query.toLowerCase());
+        const matchesColor = color === "all" || highlight.color === color;
+        const matchesDate = !date || highlight.created.slice(0, 10) >= date;
+        return matchesQuery && matchesColor && matchesDate;
+      }),
+      sortOrder,
+      (highlight) => highlight.selected_text,
+    );
+  }, [color, currentHighlights, date, highlights, query, scope, sortOrder]);
 
   const pageMatches = useMemo(() => {
     const source = scope === "book" ? indexedPages : globalPageMatches;
     if (!query.trim()) {
       return [];
     }
-    return source.filter((page) =>
-      page.content.toLowerCase().includes(query.trim().toLowerCase()),
+    return sortByOption(
+      source.filter((page) =>
+        page.content.toLowerCase().includes(query.trim().toLowerCase()),
+      ),
+      sortOrder,
+      (page) => page.content,
     );
-  }, [globalPageMatches, indexedPages, query, scope]);
+  }, [globalPageMatches, indexedPages, query, scope, sortOrder]);
 
   const noteMatches = useMemo(() => {
     const source = scope === "book" ? currentNotes : notes;
-    return source.filter((note) =>
-      note.content.toLowerCase().includes(query.toLowerCase()),
+    return sortByOption(
+      source.filter((note) =>
+        note.content.toLowerCase().includes(query.toLowerCase()),
+      ),
+      sortOrder,
+      (note) => note.content,
     );
-  }, [currentNotes, notes, query, scope]);
+  }, [currentNotes, notes, query, scope, sortOrder]);
 
   const analysisMatches = useMemo(() => {
     const source = scope === "book" ? currentAnalyses : analyses;
-    return source.filter((analysis) =>
-      `${analysis.selected_text} ${analysis.response}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+    return sortByOption(
+      source.filter((analysis) =>
+        `${analysis.selected_text} ${analysis.response}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      ),
+      sortOrder,
+      (analysis) => analysis.selected_text || analysis.response,
     );
-  }, [analyses, currentAnalyses, query, scope]);
+  }, [analyses, currentAnalyses, query, scope, sortOrder]);
+
+  const sortedOutline = useMemo(() => {
+    if (sortOrder !== "az" && sortOrder !== "za") {
+      return outline;
+    }
+    return sortByOption(outline, sortOrder, (entry) => entry.title);
+  }, [outline, sortOrder]);
+
+  const sortedCurrentHighlights = useMemo(
+    () =>
+      sortByOption(currentHighlights, sortOrder, (highlight) =>
+        highlight.selected_text,
+      ),
+    [currentHighlights, sortOrder],
+  );
+
+  const sortedCurrentNotes = useMemo(
+    () => sortByOption(currentNotes, sortOrder, (note) => note.content),
+    [currentNotes, sortOrder],
+  );
+
+  const sortedCurrentBookmarks = useMemo(
+    () =>
+      sortByOption(
+        currentBookmarks,
+        sortOrder,
+        (bookmark) => bookmark.label || `Page ${bookmark.page}`,
+      ),
+    [currentBookmarks, sortOrder],
+  );
+
+  const sortedCurrentAnalyses = useMemo(
+    () =>
+      sortByOption(
+        currentAnalyses,
+        sortOrder,
+        (analysis) => analysis.selected_text || analysis.response,
+      ),
+    [currentAnalyses, sortOrder],
+  );
 
   const bookmarkOnPage = currentBookmarks.some(
     (bookmark) => bookmark.page === activePage,
@@ -440,6 +503,15 @@ export function ResearchPanel({
     <AnimatePresence>
       {open && (
         <PanelShell onClose={onClose} tool={tool}>
+          {tool !== "progress" && tool !== "topology" && (
+            <div className="mb-4 flex justify-end">
+              <SortSelect
+                label={`Sort ${toolMeta[tool].label}`}
+                onChange={setSortOrder}
+                value={sortOrder}
+              />
+            </div>
+          )}
           {tool === "contents" && (
             <div>
               <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -460,8 +532,8 @@ export function ResearchPanel({
                 </Button>
               </div>
               <div className="mt-5 space-y-1">
-                {outline.length ? (
-                  outline.map((entry, index) => (
+                {sortedOutline.length ? (
+                  sortedOutline.map((entry, index) => (
                     <button
                       className="flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left text-xs text-slate-400 transition hover:border-cyan-300/20 hover:bg-cyan-400/[0.05] hover:text-cyan-100"
                       key={`${entry.page}-${entry.title}-${index}`}
@@ -681,8 +753,8 @@ export function ResearchPanel({
                 Save sticky note
               </Button>
               <div className="mt-5 space-y-2.5">
-                {currentNotes.length ? (
-                  currentNotes.map((note) => (
+                {sortedCurrentNotes.length ? (
+                  sortedCurrentNotes.map((note) => (
                     <NoteCard
                       key={note.id}
                       note={note}
@@ -712,8 +784,8 @@ export function ResearchPanel({
                   : `Bookmark page ${activePage}`}
               </Button>
               <div className="mt-5 space-y-1.5">
-                {currentBookmarks.length ? (
-                  currentBookmarks.map((bookmark) => (
+                {sortedCurrentBookmarks.length ? (
+                  sortedCurrentBookmarks.map((bookmark) => (
                     <div
                       className="spatial-panel flex items-center rounded-md border border-pearl/10 bg-pearl/[0.035] px-3 py-2"
                       key={bookmark.id}
@@ -744,8 +816,8 @@ export function ResearchPanel({
 
           {tool === "history" && (
             <div className="space-y-2.5">
-              {currentAnalyses.length ? (
-                currentAnalyses.map((analysis) => (
+              {sortedCurrentAnalyses.length ? (
+                sortedCurrentAnalyses.map((analysis) => (
                   <button
                     className="spatial-panel w-full rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3 text-left transition hover:border-violet-300/35"
                     key={analysis.id}
@@ -863,7 +935,7 @@ export function ResearchPanel({
               <div>
                 <div className="hud-label mb-2">Fragments</div>
                 <div className="space-y-2">
-                  {currentHighlights.slice(0, 6).map((highlight) => (
+                  {sortedCurrentHighlights.slice(0, 6).map((highlight) => (
                     <HighlightCard
                       highlight={highlight}
                       key={highlight.id}
@@ -878,7 +950,7 @@ export function ResearchPanel({
               <div>
                 <div className="hud-label mb-2">Notes</div>
                 <div className="space-y-2">
-                  {currentNotes.slice(0, 6).map((note) => (
+                  {sortedCurrentNotes.slice(0, 6).map((note) => (
                     <NoteCard
                       key={note.id}
                       note={note}
@@ -892,7 +964,7 @@ export function ResearchPanel({
               <div>
                 <div className="hud-label mb-2">Companion Syntheses</div>
                 <div className="space-y-2">
-                  {currentAnalyses.slice(0, 6).map((analysis) => (
+                  {sortedCurrentAnalyses.slice(0, 6).map((analysis) => (
                     <button
                       className="spatial-panel w-full rounded-lg border border-pearl/10 bg-pearl/[0.04] p-3 text-left transition hover:border-violet-300/35"
                       key={analysis.id}

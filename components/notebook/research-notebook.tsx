@@ -22,6 +22,7 @@ import {
 import { useRouter } from "next/navigation";
 import { AmbientBackground } from "@/components/ui/ambient-background";
 import { Brand } from "@/components/ui/brand";
+import { SortSelect } from "@/components/ui/sort-select";
 import {
   getAuthenticatedUserId,
   getPocketBase,
@@ -30,6 +31,11 @@ import {
   runPocketBaseRequest,
 } from "@/lib/pocketbase";
 import { formatResearchDate, getHighlightColor, highlightColors } from "@/lib/research";
+import {
+  getPocketBaseSort,
+  sortByOption,
+  type SortOption,
+} from "@/lib/sorting";
 import type {
   AiAnalysisRecord,
   BookRecord,
@@ -51,6 +57,7 @@ export function ResearchNotebook() {
   const [folderFilter, setFolderFilter] = useState("all");
   const [colorFilter, setColorFilter] = useState<HighlightColor | "all">("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
   const [highlights, setHighlights] = useState<HighlightRecord[]>([]);
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [analyses, setAnalyses] = useState<AiAnalysisRecord[]>([]);
@@ -69,31 +76,31 @@ export function ResearchNotebook() {
           runPocketBaseRequest("List notebook highlights", () =>
             pb.collection("highlights").getFullList<HighlightRecord>({
               filter,
-              sort: "-updated",
+              sort: getPocketBaseSort(sortOrder, "selected_text"),
             }),
           ),
           runPocketBaseRequest("List notebook notes", () =>
             pb.collection("notes").getFullList<NoteRecord>({
               filter,
-              sort: "-updated",
+              sort: getPocketBaseSort(sortOrder, "content"),
             }),
           ),
           runPocketBaseRequest("List notebook analyses", () =>
             pb.collection("ai_analyses").getFullList<AiAnalysisRecord>({
               filter,
-              sort: "-created",
+              sort: getPocketBaseSort(sortOrder, "selected_text"),
             }),
           ),
           runPocketBaseRequest("List notebook books", () =>
             pb.collection("books").getFullList<BookRecord>({
               filter,
-              sort: "title",
+              sort: getPocketBaseSort(sortOrder, "title"),
             }),
           ),
           runPocketBaseRequest("List notebook folders", () =>
             pb.collection("folders").getFullList<FolderRecord>({
               filter,
-              sort: "name",
+              sort: getPocketBaseSort(sortOrder, "name"),
             }),
           ),
         ]);
@@ -110,7 +117,7 @@ export function ResearchNotebook() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, sortOrder]);
 
   useEffect(() => {
     void loadNotebook();
@@ -137,7 +144,7 @@ export function ResearchNotebook() {
               userId,
               query: query.trim(),
             }),
-            sort: "-updated",
+            sort: getPocketBaseSort(sortOrder, "content"),
           },
         );
         setPageMatches(result.items);
@@ -148,7 +155,7 @@ export function ResearchNotebook() {
       }
     }, 260);
     return () => window.clearTimeout(timeout);
-  }, [query, tab]);
+  }, [query, sortOrder, tab]);
 
   const bookMap = useMemo(
     () => new Map(books.map((book) => [book.id, book])),
@@ -157,19 +164,23 @@ export function ResearchNotebook() {
 
   const visibleHighlights = useMemo(
     () =>
-      highlights.filter((highlight) => {
-        const book = bookMap.get(highlight.book);
-        return (
-          (!query ||
-            `${highlight.selected_text} ${highlight.note}`
-              .toLowerCase()
-              .includes(query.toLowerCase())) &&
-          (bookFilter === "all" || highlight.book === bookFilter) &&
-          (folderFilter === "all" || book?.folder === folderFilter) &&
-          (colorFilter === "all" || highlight.color === colorFilter) &&
-          (!dateFilter || highlight.created.slice(0, 10) >= dateFilter)
-        );
-      }),
+      sortByOption(
+        highlights.filter((highlight) => {
+          const book = bookMap.get(highlight.book);
+          return (
+            (!query ||
+              `${highlight.selected_text} ${highlight.note}`
+                .toLowerCase()
+                .includes(query.toLowerCase())) &&
+            (bookFilter === "all" || highlight.book === bookFilter) &&
+            (folderFilter === "all" || book?.folder === folderFilter) &&
+            (colorFilter === "all" || highlight.color === colorFilter) &&
+            (!dateFilter || highlight.created.slice(0, 10) >= dateFilter)
+          );
+        }),
+        sortOrder,
+        (highlight) => highlight.selected_text,
+      ),
     [
       bookFilter,
       bookMap,
@@ -178,38 +189,52 @@ export function ResearchNotebook() {
       folderFilter,
       highlights,
       query,
+      sortOrder,
     ],
   );
 
   const visibleNotes = useMemo(
     () =>
-      notes.filter((note) => {
-        const book = bookMap.get(note.book);
-        return (
-          (!query || note.content.toLowerCase().includes(query.toLowerCase())) &&
-          (bookFilter === "all" || note.book === bookFilter) &&
-          (folderFilter === "all" || book?.folder === folderFilter) &&
-          (!dateFilter || note.created.slice(0, 10) >= dateFilter)
-        );
-      }),
-    [bookFilter, bookMap, dateFilter, folderFilter, notes, query],
+      sortByOption(
+        notes.filter((note) => {
+          const book = bookMap.get(note.book);
+          return (
+            (!query || note.content.toLowerCase().includes(query.toLowerCase())) &&
+            (bookFilter === "all" || note.book === bookFilter) &&
+            (folderFilter === "all" || book?.folder === folderFilter) &&
+            (!dateFilter || note.created.slice(0, 10) >= dateFilter)
+          );
+        }),
+        sortOrder,
+        (note) => note.content,
+      ),
+    [bookFilter, bookMap, dateFilter, folderFilter, notes, query, sortOrder],
   );
 
   const visibleAnalyses = useMemo(
     () =>
-      analyses.filter((analysis) => {
-        const book = bookMap.get(analysis.book);
-        return (
-          (!query ||
-            `${analysis.selected_text} ${analysis.response}`
-              .toLowerCase()
-              .includes(query.toLowerCase())) &&
-          (bookFilter === "all" || analysis.book === bookFilter) &&
-          (folderFilter === "all" || book?.folder === folderFilter) &&
-          (!dateFilter || analysis.created.slice(0, 10) >= dateFilter)
-        );
-      }),
-    [analyses, bookFilter, bookMap, dateFilter, folderFilter, query],
+      sortByOption(
+        analyses.filter((analysis) => {
+          const book = bookMap.get(analysis.book);
+          return (
+            (!query ||
+              `${analysis.selected_text} ${analysis.response}`
+                .toLowerCase()
+                .includes(query.toLowerCase())) &&
+            (bookFilter === "all" || analysis.book === bookFilter) &&
+            (folderFilter === "all" || book?.folder === folderFilter) &&
+            (!dateFilter || analysis.created.slice(0, 10) >= dateFilter)
+          );
+        }),
+        sortOrder,
+        (analysis) => analysis.selected_text || analysis.response,
+      ),
+    [analyses, bookFilter, bookMap, dateFilter, folderFilter, query, sortOrder],
+  );
+
+  const sortedPageMatches = useMemo(
+    () => sortByOption(pageMatches, sortOrder, (page) => page.content),
+    [pageMatches, sortOrder],
   );
 
   const activeDates = useMemo(
@@ -335,7 +360,7 @@ export function ResearchNotebook() {
                 value={query}
               />
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <select
                 className="rounded-md border border-slate-700/35 bg-slate-950 px-2 py-2 text-xs text-slate-400 outline-none"
                 onChange={(event) => setBookFilter(event.target.value)}
@@ -379,6 +404,11 @@ export function ResearchNotebook() {
                 onChange={(event) => setDateFilter(event.target.value)}
                 type="date"
                 value={dateFilter}
+              />
+              <SortSelect
+                label="Sort notebook"
+                onChange={setSortOrder}
+                value={sortOrder}
               />
             </div>
           </div>
@@ -536,7 +566,7 @@ export function ResearchNotebook() {
                 </button>
               ))
             ) : (
-              pageMatches.map((page) => (
+              sortedPageMatches.map((page) => (
                 <button
                   className="glass-panel spatial-panel rounded-xl p-4 text-left transition hover:border-cyan-300/35"
                   key={page.id}
@@ -559,7 +589,7 @@ export function ResearchNotebook() {
               ((tab === "highlights" && visibleHighlights.length === 0) ||
                 (tab === "notes" && visibleNotes.length === 0) ||
                 (tab === "analyses" && visibleAnalyses.length === 0) ||
-                (tab === "search" && !searching && pageMatches.length === 0)) && (
+                (tab === "search" && !searching && sortedPageMatches.length === 0)) && (
                 <div className="glass-panel spatial-panel col-span-full flex min-h-52 flex-col items-center justify-center rounded-xl border-dashed p-8 text-center">
                   <CalendarDays className="h-7 w-7 text-cyan-300/45" />
                   <p className="mt-4 max-w-md text-xs leading-6 text-slate-500">

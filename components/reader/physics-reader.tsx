@@ -560,8 +560,14 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           "Load authenticated PDF",
           () => pb.collection("books").getOne<BookRecord>(bookId),
         );
+        const primaryFile = Array.isArray(currentBook.file)
+          ? currentBook.file[0]
+          : currentBook.file;
+        if (!primaryFile) {
+          throw new Error("This PDF record does not include a readable file.");
+        }
         setBook(currentBook);
-        setFileUrl(pb.files.getURL(currentBook, currentBook.file));
+        setFileUrl(pb.files.getURL(currentBook, primaryFile));
 
         try {
           const progressRows = await runPocketBaseRequest(
