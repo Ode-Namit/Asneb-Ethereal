@@ -28,11 +28,7 @@ import { Button } from "@/components/ui/button";
 import { SortSelect } from "@/components/ui/sort-select";
 import { getAuthenticatedUserId, getPocketBase, logPocketBaseError } from "@/lib/pocketbase";
 import { formatResearchDate, getHighlightColor, highlightColors } from "@/lib/research";
-import {
-  getPocketBaseSort,
-  sortByOption,
-  type SortOption,
-} from "@/lib/sorting";
+import { getPocketBaseSort, sortByOption } from "@/lib/sorting";
 import type {
   AiAnalysisRecord,
   BookmarkRecord,
@@ -43,6 +39,7 @@ import type {
   NoteRecord,
   PromptMode,
 } from "@/lib/types";
+import { useUserSortPreference } from "@/lib/use-sort-preference";
 
 export type ReaderTool =
   | "contents"
@@ -350,7 +347,7 @@ export function ResearchPanel({
   const [scope, setScope] = useState<"book" | "global">("book");
   const [color, setColor] = useState<HighlightColor | "all">("all");
   const [date, setDate] = useState("");
-  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
+  const [sortOrder, setSortOrder] = useUserSortPreference();
   const [stickyDraft, setStickyDraft] = useState("");
   const [globalPageMatches, setGlobalPageMatches] = useState<DocumentPageRecord[]>(
     [],

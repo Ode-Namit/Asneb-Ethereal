@@ -56,12 +56,9 @@ import {
   runPocketBaseRequest,
   withAuthenticatedUser,
 } from "@/lib/pocketbase";
-import {
-  getPocketBaseSort,
-  sortByOption,
-  type SortOption,
-} from "@/lib/sorting";
+import { getPocketBaseSort, sortByOption } from "@/lib/sorting";
 import type { BookRecord, FolderRecord, ReadingProgressRecord } from "@/lib/types";
+import { useUserSortPreference } from "@/lib/use-sort-preference";
 
 type Selection =
   | { type: "folder"; id: string }
@@ -1133,7 +1130,7 @@ export function DashboardWorkspace() {
   const [uploading, setUploading] = useState(false);
   const [uploadDropActive, setUploadDropActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
-  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
+  const [sortOrder, setSortOrder] = useUserSortPreference();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -2153,9 +2150,10 @@ export function DashboardWorkspace() {
                     draggable
                     className={`glass-panel spatial-panel group relative min-h-[152px] overflow-hidden rounded-xl p-4 text-left transition duration-300 hover:border-cyan-300/50 hover:shadow-neon ${
                       isTargetSelected({ type: "folder", id: folder.id })
-                        ? "border-cyan-300/70 bg-cyan-400/[0.09] ring-1 ring-cyan-200/30"
+                        ? "border-cyan-100/90 bg-cyan-300/[0.16] shadow-[0_0_38px_rgba(103,232,249,0.24)] ring-2 ring-cyan-100/45"
                         : ""
                     }`}
+                    aria-pressed={isTargetSelected({ type: "folder", id: folder.id })}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.035 }}
@@ -2174,6 +2172,12 @@ export function DashboardWorkspace() {
                     onDrop={(event) => void dropIntoFolder(event, folder.id)}
                     type="button"
                   >
+                    {isTargetSelected({ type: "folder", id: folder.id }) && (
+                      <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex items-center gap-1 rounded-full border border-cyan-100/45 bg-slate-950/75 px-2 py-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-cyan-50 shadow-[0_0_18px_rgba(103,232,249,0.28)] backdrop-blur-md">
+                        <CheckCircle2 className="h-3 w-3 text-cyan-100" />
+                        Selected
+                      </div>
+                    )}
                     <div className="flex items-start justify-between">
                       <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/[0.07] p-2.5">
                         <Folder className="h-5 w-5 text-cyan-300" strokeWidth={1.3} />
@@ -2194,9 +2198,10 @@ export function DashboardWorkspace() {
                     draggable
                     className={`glass-panel spatial-panel group relative min-h-[152px] overflow-hidden rounded-xl p-4 text-left transition duration-300 hover:border-violet-300/50 hover:shadow-violet ${
                       isTargetSelected({ type: "book", id: book.id })
-                        ? "border-violet-300/70 bg-violet-400/[0.09] ring-1 ring-violet-200/30"
+                        ? "border-violet-100/90 bg-violet-300/[0.16] shadow-[0_0_38px_rgba(167,139,250,0.26)] ring-2 ring-violet-100/45"
                         : ""
                     }`}
+                    aria-pressed={isTargetSelected({ type: "book", id: book.id })}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
@@ -2216,6 +2221,12 @@ export function DashboardWorkspace() {
                     type="button"
                   >
                     <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-violet-400/[0.06] blur-2xl" />
+                    {isTargetSelected({ type: "book", id: book.id }) && (
+                      <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex items-center gap-1 rounded-full border border-violet-100/45 bg-slate-950/75 px-2 py-1 text-[0.55rem] font-semibold uppercase tracking-[0.18em] text-violet-50 shadow-[0_0_18px_rgba(167,139,250,0.3)] backdrop-blur-md">
+                        <CheckCircle2 className="h-3 w-3 text-violet-100" />
+                        Selected
+                      </div>
+                    )}
                     <div className="flex items-start justify-between">
                       <div className="rounded-lg border border-violet-300/20 bg-violet-400/[0.07] p-2.5">
                         <FileText

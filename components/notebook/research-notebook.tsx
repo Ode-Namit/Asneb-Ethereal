@@ -34,7 +34,6 @@ import { formatResearchDate, getHighlightColor, highlightColors } from "@/lib/re
 import {
   getPocketBaseSort,
   sortByOption,
-  type SortOption,
 } from "@/lib/sorting";
 import type {
   AiAnalysisRecord,
@@ -45,6 +44,7 @@ import type {
   HighlightRecord,
   NoteRecord,
 } from "@/lib/types";
+import { useUserSortPreference } from "@/lib/use-sort-preference";
 
 type NotebookTab = "highlights" | "notes" | "analyses" | "search";
 
@@ -57,7 +57,7 @@ export function ResearchNotebook() {
   const [folderFilter, setFolderFilter] = useState("all");
   const [colorFilter, setColorFilter] = useState<HighlightColor | "all">("all");
   const [dateFilter, setDateFilter] = useState("");
-  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
+  const [sortOrder, setSortOrder] = useUserSortPreference();
   const [highlights, setHighlights] = useState<HighlightRecord[]>([]);
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [analyses, setAnalyses] = useState<AiAnalysisRecord[]>([]);
