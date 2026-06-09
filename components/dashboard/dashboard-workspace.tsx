@@ -72,6 +72,13 @@ type Notice = {
 
 type LibraryTarget = Exclude<Selection, null>;
 
+type LibrarySearchResult = LibraryTarget & {
+  parentId: string | null;
+  path: string;
+  score: number;
+  title: string;
+};
+
 const PDF_UPLOAD_MAX_BYTES = 262144000;
 
 function collectNestedFolderIds(rootId: string, folders: FolderRecord[]) {
@@ -200,6 +207,109 @@ function collectActionTargets(
     const book = books.find((item) => item.id === target.id);
     return !book?.folder || !childFolderIds.has(book.folder);
   });
+}
+
+function normalizeSearchValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getFuzzyScore(value: string, query: string) {
+  const target = normalizeSearchValue(value);
+  const needle = normalizeSearchValue(query);
+  if (!needle) {
+    return 0;
+  }
+
+  const exactIndex = target.indexOf(needle);
+  if (exactIndex >= 0) {
+    return 1000 - exactIndex - target.length * 0.01;
+  }
+
+  let queryIndex = 0;
+  let score = 0;
+  for (let index = 0; index < target.length && queryIndex < needle.length; index += 1) {
+    if (target[index] === needle[queryIndex]) {
+      score += 14 - Math.min(index, 12);
+      queryIndex += 1;
+    }
+  }
+
+  return queryIndex === needle.length ? score - target.length * 0.02 : 0;
+}
+
+function getFolderPathSegments(folderId: string | null | undefined, folders: FolderRecord[]) {
+  const segments: string[] = [];
+  let cursor = folders.find((folder) => folder.id === folderId);
+  const visited = new Set<string>();
+
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
+    segments.unshift(cursor.name);
+    cursor = folders.find((folder) => folder.id === cursor?.parent);
+  }
+
+  return segments;
+}
+
+function formatLibraryPath(segments: string[]) {
+  return ["Library", ...segments].join(" > ");
+}
+
+function buildGlobalSearchResults(
+  query: string,
+  folders: FolderRecord[],
+  books: BookRecord[],
+) {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return [];
+  }
+
+  const folderResults = folders
+    .map<LibrarySearchResult | null>((folder) => {
+      const segments = getFolderPathSegments(folder.id, folders);
+      const path = formatLibraryPath(segments);
+      const score = Math.max(
+        getFuzzyScore(folder.name, trimmedQuery),
+        getFuzzyScore(path, trimmedQuery) * 0.72,
+      );
+      return score > 0
+        ? {
+            id: folder.id,
+            parentId: normalizeParent(folder.parent),
+            path,
+            score,
+            title: folder.name,
+            type: "folder",
+          }
+        : null;
+    })
+    .filter((result): result is LibrarySearchResult => Boolean(result));
+
+  const bookResults = books
+    .map<LibrarySearchResult | null>((book) => {
+      const folderSegments = getFolderPathSegments(book.folder, folders);
+      const path = formatLibraryPath([...folderSegments, book.title]);
+      const score = Math.max(
+        getFuzzyScore(book.title, trimmedQuery),
+        getFuzzyScore(path, trimmedQuery) * 0.72,
+      );
+      return score > 0
+        ? {
+            id: book.id,
+            parentId: normalizeParent(book.folder),
+            path,
+            score,
+            title: book.title,
+            type: "book",
+          }
+        : null;
+    })
+    .filter((result): result is LibrarySearchResult => Boolean(result));
+
+  return [...folderResults, ...bookResults]
+    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+    .slice(0, 18);
 }
 
 function FolderTreeItem({
@@ -1229,6 +1339,11 @@ export function DashboardWorkspace() {
     [activeFolder, books, search, sortOrder],
   );
 
+  const globalSearchResults = useMemo(
+    () => buildGlobalSearchResults(search, folders, books),
+    [books, folders, search],
+  );
+
   const currentItems = useMemo<LibraryTarget[]>(
     () => [
       ...currentFolders.map((folder) => ({ type: "folder" as const, id: folder.id })),
@@ -1304,6 +1419,15 @@ export function DashboardWorkspace() {
   function selectFolder(folderId: string | null) {
     setActiveFolder(folderId);
     clearLibrarySelection();
+    setSidebarOpen(false);
+  }
+
+  function openGlobalSearchResult(result: LibrarySearchResult) {
+    const target = { type: result.type, id: result.id } as LibraryTarget;
+    setActiveFolder(result.parentId);
+    setSelections([target]);
+    setLastSelectedTarget(target);
+    setSearch("");
     setSidebarOpen(false);
   }
 
@@ -1886,7 +2010,7 @@ export function DashboardWorkspace() {
             <input
               className="w-full max-w-md rounded-lg border border-slate-700/30 bg-slate-950/30 py-2 pl-9 pr-3 text-xs text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-300/40"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search this realm..."
+              placeholder="Search the entire sanctuary..."
               value={search}
             />
           </div>
@@ -2092,6 +2216,59 @@ export function DashboardWorkspace() {
               )}
               {notice.message}
             </button>
+          )}
+
+          {search.trim() && (
+            <section className="mt-6 rounded-xl border border-cyan-300/15 bg-slate-950/32 p-4 shadow-[0_0_36px_rgba(103,232,249,0.08)] backdrop-blur-xl">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <div className="hud-label">Global Sanctuary Search</div>
+                <div className="h-px flex-1 bg-gradient-to-r from-cyan-300/25 to-transparent" />
+                <div className="font-mono text-[0.58rem] uppercase tracking-[0.2em] text-cyan-100/60">
+                  {globalSearchResults.length} match
+                  {globalSearchResults.length === 1 ? "" : "es"}
+                </div>
+              </div>
+              {globalSearchResults.length ? (
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {globalSearchResults.map((result) => (
+                    <button
+                      className="group spatial-panel rounded-lg border border-pearl/10 bg-pearl/[0.035] px-3 py-3 text-left transition hover:border-cyan-300/35 hover:bg-cyan-400/[0.06] hover:shadow-neon"
+                      key={`${result.type}-${result.id}`}
+                      onClick={() => openGlobalSearchResult(result)}
+                      type="button"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span
+                          className={`rounded-md border p-1.5 ${
+                            result.type === "folder"
+                              ? "border-cyan-300/20 bg-cyan-400/[0.08] text-cyan-200"
+                              : "border-violet-300/20 bg-violet-400/[0.08] text-violet-200"
+                          }`}
+                        >
+                          {result.type === "folder" ? (
+                            <Folder className="h-3.5 w-3.5" />
+                          ) : (
+                            <FileText className="h-3.5 w-3.5" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold text-slate-100 group-hover:text-cyan-100">
+                            {result.title}
+                          </span>
+                          <span className="mt-1 line-clamp-2 block text-[0.65rem] leading-4 text-slate-500">
+                            {result.path}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-pearl/12 bg-pearl/[0.025] px-4 py-6 text-center text-xs text-slate-500">
+                  No realms or PDFs match this search yet.
+                </div>
+              )}
+            </section>
           )}
 
           <section

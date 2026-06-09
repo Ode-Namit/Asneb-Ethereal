@@ -81,6 +81,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 type FloatingMenu = {
   anchor: PdfAnchor;
   page: number;
+  placement: "above" | "below";
   text: string;
   x: number;
   y: number;
@@ -753,12 +754,18 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
           return;
         }
         const rect = range.getBoundingClientRect();
+        const safeOffset = 26;
+        const estimatedPanelHeight = 126;
+        const hasRoomAbove = rect.top > estimatedPanelHeight + safeOffset + 72;
         setFloatingMenu({
           anchor,
           page: Number(pageElement.dataset.page),
+          placement: hasRoomAbove ? "above" : "below",
           text,
           x: Math.max(175, Math.min(window.innerWidth - 175, rect.left + rect.width / 2)),
-          y: Math.max(86, rect.top - 10),
+          y: hasRoomAbove
+            ? Math.max(86, rect.top - safeOffset)
+            : Math.min(window.innerHeight - 24, rect.bottom + safeOffset),
         });
       }, 0);
     }
@@ -1347,7 +1354,10 @@ export function PhysicsReader({ bookId }: { bookId: string }) {
               {
                 left: floatingMenu.x,
                 top: floatingMenu.y,
-                transform: "translate(-50%, -100%)",
+                transform:
+                  floatingMenu.placement === "above"
+                    ? "translate(-50%, -100%)"
+                    : "translate(-50%, 0)",
               } as CSSProperties
             }
           >

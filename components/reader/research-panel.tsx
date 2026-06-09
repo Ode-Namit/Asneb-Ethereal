@@ -8,14 +8,17 @@ import {
   Bookmark,
   BookOpen,
   Bot,
+  ChevronDown,
+  ChevronRight,
   Clipboard,
   Clock3,
   FileSearch,
   Filter,
   FlaskConical,
+  Folder,
+  FolderPlus,
   Highlighter,
   LoaderCircle,
-  Map,
   MessageSquareText,
   Network,
   NotebookPen,
@@ -29,6 +32,10 @@ import { SortSelect } from "@/components/ui/sort-select";
 import { getAuthenticatedUserId, getPocketBase, logPocketBaseError } from "@/lib/pocketbase";
 import { formatResearchDate, getHighlightColor, highlightColors } from "@/lib/research";
 import { getPocketBaseSort, sortByOption } from "@/lib/sorting";
+import {
+  type HighlightGroup,
+  useHighlightGroups,
+} from "@/lib/use-highlight-groups";
 import type {
   AiAnalysisRecord,
   BookmarkRecord,
@@ -168,15 +175,21 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 function HighlightCard({
+  groupId,
+  groupOptions = [],
   highlight,
   onAsk,
   onDelete,
+  onMoveGroup,
   onNavigate,
   onUpdateNote,
 }: {
+  groupId?: string | null;
+  groupOptions?: Array<{ id: string; label: string }>;
   highlight: HighlightRecord;
   onAsk: (text: string) => void;
   onDelete: (highlightId: string) => void;
+  onMoveGroup?: (highlightId: string, groupId: string | null) => void;
   onNavigate: (page: number, highlightId?: string) => void;
   onUpdateNote: (highlightId: string, note: string) => void;
 }) {
@@ -221,6 +234,26 @@ function HighlightCard({
         value={highlight.note}
       />
       <div className="mt-2 flex items-center gap-1">
+        {onMoveGroup && (
+          <select
+            aria-label="Move highlight to group"
+            className="max-w-[150px] rounded-md border border-slate-700/45 bg-slate-950/70 px-2 py-1.5 text-[0.6rem] font-semibold uppercase tracking-wider text-slate-400 outline-none transition hover:border-cyan-300/35 focus:border-cyan-300/45"
+            onChange={(event) =>
+              onMoveGroup(
+                highlight.id,
+                event.target.value === "ungrouped" ? null : event.target.value,
+              )
+            }
+            value={groupId ?? "ungrouped"}
+          >
+            <option value="ungrouped">Ungrouped</option>
+            {groupOptions.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.label}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           aria-label="Copy highlight"
           className="rounded-md p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-cyan-200"
@@ -246,6 +279,80 @@ function HighlightCard({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+function HighlightGroupSection({
+  childGroupsByParent,
+  depth = 0,
+  expandedGroupIds,
+  group,
+  groupCounts,
+  highlightsByGroup,
+  onToggle,
+  renderHighlight,
+}: {
+  childGroupsByParent: Map<string | null, HighlightGroup[]>;
+  depth?: number;
+  expandedGroupIds: Set<string>;
+  group: HighlightGroup;
+  groupCounts: Map<string, number>;
+  highlightsByGroup: Map<string | null, HighlightRecord[]>;
+  onToggle: (groupId: string) => void;
+  renderHighlight: (highlight: HighlightRecord) => React.ReactNode;
+}) {
+  const childGroups = childGroupsByParent.get(group.id) ?? [];
+  const directHighlights = highlightsByGroup.get(group.id) ?? [];
+  const expanded = expandedGroupIds.has(group.id);
+  const count = groupCounts.get(group.id) ?? directHighlights.length;
+
+  return (
+    <div className="rounded-lg border border-pearl/10 bg-pearl/[0.025] p-2">
+      <button
+        className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition hover:bg-cyan-400/[0.05]"
+        onClick={() => onToggle(group.id)}
+        style={{ paddingLeft: 8 + depth * 10 }}
+        type="button"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 text-cyan-300/70" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-cyan-300/70" />
+        )}
+        <Folder className="h-3.5 w-3.5 text-aureate/80" />
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-200">
+          {group.name}
+        </span>
+        <span className="rounded-full border border-cyan-300/15 bg-cyan-400/[0.07] px-2 py-0.5 font-mono text-[0.56rem] text-cyan-100/75">
+          {count}
+        </span>
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2.5">
+          {directHighlights.map((highlight) => (
+            <div key={highlight.id}>{renderHighlight(highlight)}</div>
+          ))}
+          {childGroups.map((childGroup) => (
+            <HighlightGroupSection
+              childGroupsByParent={childGroupsByParent}
+              depth={depth + 1}
+              expandedGroupIds={expandedGroupIds}
+              group={childGroup}
+              groupCounts={groupCounts}
+              highlightsByGroup={highlightsByGroup}
+              key={childGroup.id}
+              onToggle={onToggle}
+              renderHighlight={renderHighlight}
+            />
+          ))}
+          {!directHighlights.length && !childGroups.length && (
+            <div className="rounded-md border border-dashed border-pearl/10 px-3 py-4 text-center text-[0.68rem] text-slate-600">
+              This group is waiting for highlights.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -348,11 +455,28 @@ export function ResearchPanel({
   const [color, setColor] = useState<HighlightColor | "all">("all");
   const [date, setDate] = useState("");
   const [sortOrder, setSortOrder] = useUserSortPreference();
+  const [groupDraft, setGroupDraft] = useState("");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [groupParent, setGroupParent] = useState("root");
   const [stickyDraft, setStickyDraft] = useState("");
   const [globalPageMatches, setGlobalPageMatches] = useState<DocumentPageRecord[]>(
     [],
   );
   const [searching, setSearching] = useState(false);
+  const {
+    assignments: highlightGroupAssignments,
+    createGroup: createHighlightGroup,
+    expandedGroupIds,
+    groups: highlightGroups,
+    moveHighlightToGroup,
+    toggleGroup,
+  } = useHighlightGroups(book?.id ?? null);
+
+  useEffect(() => {
+    setGroupDraft("");
+    setGroupFilter("all");
+    setGroupParent("root");
+  }, [book?.id]);
 
   useEffect(() => {
     if (tool !== "search" || scope !== "global" || query.trim().length < 2) {
@@ -391,6 +515,52 @@ export function ResearchPanel({
     return () => window.clearTimeout(timeout);
   }, [query, scope, sortOrder, tool]);
 
+  const childGroupsByParent = useMemo(() => {
+    const groupsByParent = new Map<string | null, HighlightGroup[]>();
+    for (const group of highlightGroups) {
+      const siblings = groupsByParent.get(group.parentId) ?? [];
+      siblings.push(group);
+      groupsByParent.set(group.parentId, siblings);
+    }
+    groupsByParent.forEach((groups) =>
+      groups.sort((left, right) => left.name.localeCompare(right.name)),
+    );
+    return groupsByParent;
+  }, [highlightGroups]);
+
+  const groupOptions = useMemo(() => {
+    const options: Array<{ id: string; label: string }> = [];
+    const visit = (parentId: string | null, depth: number) => {
+      for (const group of childGroupsByParent.get(parentId) ?? []) {
+        options.push({
+          id: group.id,
+          label: `${"— ".repeat(depth)}${group.name}`,
+        });
+        visit(group.id, depth + 1);
+      }
+    };
+    visit(null, 0);
+    return options;
+  }, [childGroupsByParent]);
+
+  const descendantGroupsById = useMemo(() => {
+    const descendants = new Map<string, Set<string>>();
+    const collect = (groupId: string) => {
+      const collected = new Set<string>();
+      for (const childGroup of childGroupsByParent.get(groupId) ?? []) {
+        collected.add(childGroup.id);
+        for (const nestedGroupId of collect(childGroup.id)) {
+          collected.add(nestedGroupId);
+        }
+      }
+      return collected;
+    };
+    for (const group of highlightGroups) {
+      descendants.set(group.id, collect(group.id));
+    }
+    return descendants;
+  }, [childGroupsByParent, highlightGroups]);
+
   const visibleHighlights = useMemo(() => {
     const source = scope === "book" ? currentHighlights : highlights;
     return sortByOption(
@@ -402,12 +572,65 @@ export function ResearchPanel({
             .includes(query.toLowerCase());
         const matchesColor = color === "all" || highlight.color === color;
         const matchesDate = !date || highlight.created.slice(0, 10) >= date;
-        return matchesQuery && matchesColor && matchesDate;
+        const assignedGroup = highlightGroupAssignments[highlight.id] ?? null;
+        const matchesGroup =
+          scope !== "book" || groupFilter === "all"
+            ? true
+            : groupFilter === "ungrouped"
+              ? !assignedGroup
+              : assignedGroup === groupFilter ||
+                Boolean(
+                  assignedGroup &&
+                    descendantGroupsById.get(groupFilter)?.has(assignedGroup),
+                );
+        return matchesQuery && matchesColor && matchesDate && matchesGroup;
       }),
       sortOrder,
       (highlight) => highlight.selected_text,
     );
-  }, [color, currentHighlights, date, highlights, query, scope, sortOrder]);
+  }, [
+    color,
+    currentHighlights,
+    date,
+    descendantGroupsById,
+    groupFilter,
+    highlightGroupAssignments,
+    highlights,
+    query,
+    scope,
+    sortOrder,
+  ]);
+
+  const highlightsByGroup = useMemo(() => {
+    const grouped = new Map<string | null, HighlightRecord[]>();
+    for (const highlight of visibleHighlights) {
+      const groupId = highlightGroupAssignments[highlight.id] ?? null;
+      const groupHighlights = grouped.get(groupId) ?? [];
+      groupHighlights.push(highlight);
+      grouped.set(groupId, groupHighlights);
+    }
+    return grouped;
+  }, [highlightGroupAssignments, visibleHighlights]);
+
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const countGroup = (groupId: string): number => {
+      const directCount = highlightsByGroup.get(groupId)?.length ?? 0;
+      const childCount = (childGroupsByParent.get(groupId) ?? []).reduce(
+        (total, group) => total + countGroup(group.id),
+        0,
+      );
+      const total = directCount + childCount;
+      counts.set(groupId, total);
+      return total;
+    };
+    for (const group of highlightGroups) {
+      if (!counts.has(group.id)) {
+        countGroup(group.id);
+      }
+    }
+    return counts;
+  }, [childGroupsByParent, highlightGroups, highlightsByGroup]);
 
   const pageMatches = useMemo(() => {
     const source = scope === "book" ? indexedPages : globalPageMatches;
@@ -507,6 +730,34 @@ export function ResearchPanel({
 
     onNavigate(page, highlightId);
   };
+
+  function submitHighlightGroup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parentId = groupParent === "root" ? null : groupParent;
+    createHighlightGroup(groupDraft, parentId);
+    setGroupDraft("");
+  }
+
+  const renderHighlightCard = (highlight: HighlightRecord) => (
+    <HighlightCard
+      groupId={highlightGroupAssignments[highlight.id] ?? null}
+      groupOptions={groupOptions}
+      highlight={highlight}
+      key={highlight.id}
+      onAsk={onAsk}
+      onDelete={onDeleteHighlight}
+      onMoveGroup={scope === "book" ? moveHighlightToGroup : undefined}
+      onNavigate={(page, highlightId) =>
+        openResearchLocation(highlight.book, page, highlightId)
+      }
+      onUpdateNote={onUpdateHighlightNote}
+    />
+  );
+
+  const highlightGroupsToRender =
+    groupFilter !== "all" && groupFilter !== "ungrouped"
+      ? highlightGroups.filter((group) => group.id === groupFilter)
+      : childGroupsByParent.get(null) ?? [];
 
   return (
     <AnimatePresence>
@@ -716,21 +967,97 @@ export function ResearchPanel({
                   type="date"
                   value={date}
                 />
+                {scope === "book" && (
+                  <select
+                    className="rounded-md border border-slate-700/35 bg-slate-950 px-2 py-1 text-[0.58rem] uppercase tracking-wider text-slate-400 outline-none"
+                    onChange={(event) => setGroupFilter(event.target.value)}
+                    value={groupFilter}
+                  >
+                    <option value="all">All groups</option>
+                    <option value="ungrouped">Ungrouped</option>
+                    {groupOptions.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
+              {scope === "book" && (
+                <form
+                  className="mt-3 rounded-lg border border-aureate/15 bg-aureate/[0.035] p-2.5"
+                  onSubmit={submitHighlightGroup}
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <FolderPlus className="h-3.5 w-3.5 text-aureate/75" />
+                    <div className="hud-label text-[0.48rem]">Highlight Groups</div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_0.9fr_auto]">
+                    <input
+                      className="rounded-md border border-slate-700/35 bg-slate-950/70 px-2.5 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-aureate/45"
+                      maxLength={80}
+                      onChange={(event) => setGroupDraft(event.target.value)}
+                      placeholder="New group..."
+                      value={groupDraft}
+                    />
+                    <select
+                      className="rounded-md border border-slate-700/35 bg-slate-950/70 px-2.5 py-2 text-xs text-slate-400 outline-none focus:border-aureate/45"
+                      onChange={(event) => setGroupParent(event.target.value)}
+                      value={groupParent}
+                    >
+                      <option value="root">Top level</option>
+                      {groupOptions.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button disabled={!groupDraft.trim()} type="submit" variant="ghost">
+                      <FolderPlus className="h-3.5 w-3.5" />
+                      Add
+                    </Button>
+                  </div>
+                </form>
+              )}
               <div className="mt-4 space-y-2.5">
                 {visibleHighlights.length ? (
-                  visibleHighlights.map((highlight) => (
-                    <HighlightCard
-                      highlight={highlight}
-                      key={highlight.id}
-                      onAsk={onAsk}
-                      onDelete={onDeleteHighlight}
-                      onNavigate={(page, highlightId) =>
-                        openResearchLocation(highlight.book, page, highlightId)
-                      }
-                      onUpdateNote={onUpdateHighlightNote}
-                    />
-                  ))
+                  scope === "book" ? (
+                    <>
+                      {(groupFilter === "all" || groupFilter === "ungrouped") &&
+                        Boolean(highlightsByGroup.get(null)?.length) && (
+                          <div className="rounded-lg border border-pearl/10 bg-pearl/[0.025] p-2">
+                            <div className="flex items-center gap-2 px-2 py-2">
+                              <Folder className="h-3.5 w-3.5 text-slate-500" />
+                              <span className="flex-1 text-xs font-semibold text-slate-300">
+                                Ungrouped
+                              </span>
+                              <span className="rounded-full border border-slate-600/35 px-2 py-0.5 font-mono text-[0.56rem] text-slate-500">
+                                {highlightsByGroup.get(null)?.length ?? 0}
+                              </span>
+                            </div>
+                            <div className="mt-2 space-y-2.5">
+                              {(highlightsByGroup.get(null) ?? []).map((highlight) =>
+                                renderHighlightCard(highlight),
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      {highlightGroupsToRender.map((group) => (
+                        <HighlightGroupSection
+                          childGroupsByParent={childGroupsByParent}
+                          expandedGroupIds={expandedGroupIds}
+                          group={group}
+                          groupCounts={groupCounts}
+                          highlightsByGroup={highlightsByGroup}
+                          key={group.id}
+                          onToggle={toggleGroup}
+                          renderHighlight={renderHighlightCard}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    visibleHighlights.map((highlight) => renderHighlightCard(highlight))
+                  )
                 ) : (
                   <EmptyState>
                     Highlight a passage in the PDF to preserve it as a memory fragment.
